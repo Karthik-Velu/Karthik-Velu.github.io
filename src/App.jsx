@@ -149,7 +149,7 @@ export default function App() {
             <nav className="bg-white shadow-sm sticky top-0 z-50 no-print">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between h-16 items-center">
-                        <div className="font-bold text-2xl text-blue-600 tracking-tight">KV<span className="text-slate-900">.</span></div>
+                        <div className="font-bold text-2xl text-slate-900 tracking-tight">Karthik Velu</div>
                         <div className="flex space-x-3">
                             <a 
                                 href="/Karthik_Velu_CV.pdf" 
