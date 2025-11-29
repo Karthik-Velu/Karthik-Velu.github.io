@@ -1,0 +1,1912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KI Product Demo - Kenya</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: White & Teal Professional -->
+    <!-- Application Structure Plan: The application is structured as a Single Page Application (SPA) with two primary, switchable modules: "KI DealScreen" and "KI DealTrack". DealScreen features a tabbed home page for "Originators" and "Transactions". The Transactions tab is further divided into "Active" and "Available" portfolios. A new workflow is implemented where an "Active" transaction can have its covenants set up, which then changes its state and available actions. -->
+    <!-- Visualization & Content Choices: 
+        - Home Page: Goal: Overview/Navigate. Method: Tabbed interface. Detailed tables for originators and transactions (split into active/available). Interaction: Buttons to initiate workflows, filters, and links to other views/modules. Justification: Provides a clear, data-rich, and actionable starting point.
+        - Loan Listing: Goal: Detailed view. Method: An expanded table listing individual loans within a pool. Interaction: Clickable KI scores. Justification: Fulfills the requirement for more detailed loan-level data.
+        - KI Score Page: Goal: Explain/Drill-down. Method: A full-page view with a summary card for top contributors and multiple categorized cards for over 20 influencing variables. Justification: Adds a crucial layer of transparency and explainability.
+        - Covenant Setup: Goal: Configure Monitoring. Method: A dedicated page matching the Figma design for setting up document and financial covenants. Justification: Implements a key user workflow.
+        - Library/Method: Chart.js for all charting, Vanilla JS for all state management and interactivity, Tailwind CSS for all styling.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .view { display: none; }
+        .view.active { display: block; }
+        .page-view { display: none; }
+        .page-view.active { display: block; }
+        .home-tab-content { display: none; }
+        .home-tab-content.active { display: block; }
+        .sub-step { display: none; }
+        .sub-step.active { display: block; }
+        .nav-link { transition: all 0.2s ease-in-out; }
+        .nav-link.active { background-color: #14b8a6; color: white; }
+        .home-tab-link { transition: all 0.2s ease-in-out; border-bottom: 2px solid transparent; }
+        .home-tab-link.active { border-color: #14b8a6; color: #0f766e; font-weight: 600; }
+        .ki-score-link { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #14b8a6; cursor: pointer; border-radius: 50%; }
+        input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: #14b8a6; cursor: pointer; border-radius: 50%; }
+        .chart-container { position: relative; width: 100%; height: 300px; }
+        .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #14b8a6; animation: spin 1s ease infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- Main Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-40">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-3">
+                        <button id="homeBtn" class="w-9 h-9 bg-teal-600 rounded-full flex items-center justify-center text-white font-bold text-lg">K</button>
+                        <span class="text-xl font-semibold text-gray-700">Kaleidofin</span>
+                    </div>
+                    <div class="bg-gray-100 p-1 rounded-lg flex space-x-1">
+                        <button id="dealScreenBtn" class="nav-link active px-4 py-1.5 text-sm font-semibold rounded-md">KI DealScreen</button>
+                        <button id="dealTrackBtn" class="nav-link px-4 py-1.5 text-sm font-semibold rounded-md">KI DealTrack</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-grow">
+            <!-- KI DealScreen View -->
+            <div id="dealScreenView" class="view active">
+                <div id="dealScreenHomePage" class="page-view active">
+                    <div class="bg-white border-b">
+                        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <nav id="homeTabsNav" class="flex space-x-8 -mb-px">
+                                <button data-tab="originators" class="home-tab-link active py-4 px-1 text-sm font-medium">Originators</button>
+                                <button data-tab="transactions" class="home-tab-link py-4 px-1 text-sm font-medium">Transactions</button>
+                            </nav>
+                        </div>
+                    </div>
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <!-- Originators Tab -->
+                        <div id="originatorsTab" class="home-tab-content active">
+                            <div class="flex justify-between items-center mb-6">
+                                <h1 class="text-2xl font-bold text-gray-800">Onboarded Originators</h1>
+                                <button id="addNewOriginatorBtn" class="bg-teal-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-teal-700 text-sm">Add New Originator</button>
+                            </div>
+                            <div class="bg-white p-5 rounded-lg border shadow-sm">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left text-gray-500">
+                                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                            <tr>
+                                                <th scope="col" class="px-6 py-3">Originator Name</th>
+                                                <th scope="col" class="px-6 py-3">KI Score</th>
+                                                <th scope="col" class="px-6 py-3">PAR 90+</th>
+                                                <th scope="col" class="px-6 py-3">Avg. Yield</th>
+                                                <th scope="col" class="px-6 py-3">Overall AUM (KES)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="originatorsTableBody">
+                                            <!-- Originator rows will be dynamically inserted here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Transactions Tab -->
+                        <div id="transactionsTab" class="home-tab-content">
+                             <div class="flex justify-between items-center mb-6">
+                                <h1 class="text-2xl font-bold text-gray-800">Transactions</h1>
+                                <button id="createNewTransactionBtn" class="bg-teal-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-teal-700 text-sm">Create New Transaction</button>
+                            </div>
+                            <div class="mb-8">
+                                <h2 class="text-xl font-semibold text-gray-700 mb-4">Active Transactions</h2>
+                                <div class="bg-white p-5 rounded-lg border shadow-sm">
+                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Search</label>
+                                            <input type="text" placeholder="e.g., RMFB-BODA-001" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Originator</label>
+                                            <select class="mt-1 block w-full rounded-md border-gray-300 py-2 shadow-sm sm:text-sm">
+                                                <option>All</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Structure</label>
+                                            <select class="mt-1 block w-full rounded-md border-gray-300 py-2 shadow-sm sm:text-sm">
+                                                <option>All</option>
+                                                <option>Term Loan</option>
+                                                <option>Securitisation</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Status</label>
+                                            <select class="mt-1 block w-full rounded-md border-gray-300 py-2 shadow-sm sm:text-sm">
+                                                <option>All</option>
+                                                <option>Active</option>
+                                                <option>Covenant Setup</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm text-left text-gray-500">
+                                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                                <tr>
+                                                    <th scope="col" class="px-6 py-3">Transaction Name</th>
+                                                    <th scope="col" class="px-6 py-3">Originator</th>
+                                                    <th scope="col" class="px-6 py-3">Structure</th>
+                                                    <th scope="col" class="px-6 py-3">Rating</th>
+                                                    <th scope="col" class="px-6 py-3">Avg. Tenure</th>
+                                                    <th scope="col" class="px-6 py-3">Pool Yield</th>
+                                                    <th scope="col" class="px-6 py-3 text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="activeTransactionsTableBody">
+                                                <!-- Active transactions will be dynamically inserted here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-700 mb-4">Available Portfolios</h2>
+                                 <div class="bg-white p-5 rounded-lg border shadow-sm">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Search</label>
+                                            <input type="text" placeholder="e.g., Agri-Finance Jun 2025" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Originator</label>
+                                            <select class="mt-1 block w-full rounded-md border-gray-300 py-2 shadow-sm sm:text-sm">
+                                                <option>All</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">Asset Class</label>
+                                            <select class="mt-1 block w-full rounded-md border-gray-300 py-2 shadow-sm sm:text-sm">
+                                                <option>All</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm text-left text-gray-500">
+                                             <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                                <tr>
+                                                    <th scope="col" class="px-6 py-3">Portfolio Name</th>
+                                                    <th scope="col" class="px-6 py-3">Originator</th>
+                                                    <th scope="col" class="px-6 py-3">Asset Class</th>
+                                                    <th scope="col" class="px-6 py-3">Pool Size (KES)</th>
+                                                    <th scope="col" class="px-6 py-3">Avg. Tenure</th>
+                                                    <th scope="col" class="px-6 py-3">Historical PAR 90+</th>
+                                                    <th scope="col" class="px-6 py-3 text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="availablePortfoliosTableBody">
+                                                <!-- Available portfolios will be dynamically inserted here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Originator Onboarding Page -->
+                <div id="originatorOnboardingPage" class="page-view">
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="text-center mb-8">
+                            <h1 class="text-2xl font-bold text-gray-800">Originator Onboarding & Analysis</h1>
+                        </div>
+                        <div id="originatorUpload" class="max-w-2xl mx-auto text-center">
+                            <div class="p-6 border-2 border-dashed border-gray-300 rounded-lg bg-white">
+                                <p class="font-semibold mb-2">Upload Files</p>
+                                <p class="text-sm text-gray-500 mb-4">Drag & drop or click to upload MIS portfolio report and financial statements.</p>
+                                <button id="uploadOriginatorFilesBtn" class="bg-teal-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-teal-700">Upload & Analyze</button>
+                            </div>
+                        </div>
+                        <div id="originatorAnalyzing" class="hidden max-w-2xl mx-auto text-center">
+                            <div class="p-6 border border-gray-200 bg-white rounded-lg shadow-sm">
+                                <p class="font-semibold mb-4">Analyzing Uploaded Files...</p>
+                                <div class="space-y-3 text-left">
+                                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                        <span class="text-sm font-medium text-gray-700">MIS_Portfolio_Jun2025.csv</span>
+                                        <span class="text-sm text-green-600 font-semibold">✓ Uploaded</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                        <span class="text-sm font-medium text-gray-700">Audited_Financials_2024.pdf</span>
+                                        <span class="text-sm text-green-600 font-semibold">✓ Uploaded</span>
+                                    </div>
+                                </div>
+                                <div class="flex justify-center mt-6">
+                                    <div class="spinner"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="originatorAnalysisResult" class="hidden mt-8 space-y-8">
+                             <div class="max-w-2xl mx-auto bg-white p-4 rounded-lg border mb-6 text-center shadow-sm">
+                                <h3 class="text-xl font-bold text-gray-800" id="analysisOriginatorName"></h3>
+                                <p class="text-sm text-gray-500" id="analysisOriginatorCategory"></p>
+                            </div>
+                             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+                                <div class="bg-white p-4 rounded-lg border"><p class="text-sm text-gray-500">Total AUM</p><p id="analysisAum" class="text-xl font-bold text-gray-800">KES 5.0B</p></div>
+                                <div class="bg-white p-4 rounded-lg border"><p class="text-sm text-gray-500">Avg. Loan Size</p><p class="text-xl font-bold text-gray-800">KES 125K</p></div>
+                                <div class="bg-white p-4 rounded-lg border"><p class="text-sm text-gray-500">PAR 90+</p><p id="analysisPar" class="text-xl font-bold text-red-600">4.2%</p></div>
+                                <div class="bg-white p-4 rounded-lg border"><p class="text-sm text-gray-500">Avg. Tenure</p><p class="text-xl font-bold text-gray-800">22 Months</p></div>
+                                <div class="bg-white p-4 rounded-lg border"><p class="text-sm text-gray-500">Avg. Yield</p><p id="analysisYield" class="text-xl font-bold text-green-600">21.5%</p></div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                <div class="bg-white p-4 rounded-lg border"><h3 class="font-semibold text-center mb-2">Asset-Class Distribution</h3><div class="chart-container h-48"><canvas id="assetClassDistChart"></canvas></div></div>
+                                <div class="bg-white p-4 rounded-lg border"><h3 class="font-semibold text-center mb-2">Geographical Distribution</h3><div class="chart-container h-48"><canvas id="geographicalDistChart"></canvas></div></div>
+                            </div>
+                            
+                            <div class="bg-white p-4 rounded-lg border lg:col-span-1 mb-6">
+                                <h3 class="font-semibold text-center mb-2">KI Score</h3>
+                                <div class="text-center mt-4">
+                                    <p class="text-5xl font-bold text-teal-600"><button id="analysisKiScore" class="ki-score-link" data-score-type="originator" data-name=""></button></p>
+                                    <p class="text-lg font-semibold text-gray-500">Rating: A+</p>
+                                </div>
+                            </div>
+
+                            <div id="originatorInsightsContainer" class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <!-- Insights will be injected here by JS -->
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="bg-white p-4 rounded-lg border"><h3 class="font-semibold text-center mb-2">30+ Delinquency by Asset Class</h3><div class="chart-container h-64"><canvas id="delinquencyByAssetClass30"></canvas></div></div>
+                                <div class="bg-white p-4 rounded-lg border"><h3 class="font-semibold text-center mb-2">90+ Delinquency (PAR 90+) by Asset Class</h3><div class="chart-container h-64"><canvas id="delinquencyByAssetClass90"></canvas></div></div>
+                                <div class="bg-white p-4 rounded-lg border"><h3 class="font-semibold text-center mb-2">Portfolio Growth (AUM)</h3><div class="chart-container h-64"><canvas id="portfolioGrowthChart"></canvas></div></div>
+                                <div class="bg-white p-4 rounded-lg border"><h3 class="font-semibold text-center mb-2">Yield vs. Cost of Funds</h3><div class="chart-container h-64"><canvas id="yieldVsCofChart"></canvas></div></div>
+                            </div>
+                             <div class="text-center mt-8">
+                                <button id="onboardOriginatorBtn" class="bg-teal-600 text-white px-8 py-2.5 rounded-lg font-semibold hover:bg-teal-700">Onboard Originator</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Transaction Type Selection Page -->
+                <div id="transactionTypePage" class="page-view">
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="max-w-md mx-auto text-center">
+                            <h1 class="text-2xl font-bold text-gray-800 mb-2">Create New Transaction</h1>
+                            <p class="text-gray-600 mb-8">Please select the type of transaction you would like to create.</p>
+                            <div class="space-y-4">
+                                <button data-tx-type="Securitisation" class="tx-type-select-btn w-full bg-teal-600 text-white p-4 rounded-lg font-semibold text-lg hover:bg-teal-700">Securitisation</button>
+                                <button data-tx-type="Term Loan" class="tx-type-select-btn w-full bg-white border border-gray-300 text-gray-700 p-4 rounded-lg font-semibold text-lg hover:bg-gray-50">Term Loan</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Pool Creation Page -->
+                <div id="poolCreationPage" class="page-view">
+                     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <!-- Sub-Step 2a: Pool Upload -->
+                        <div id="poolUploadSubStep" class="sub-step active">
+                            <div class="text-center mb-8">
+                                <h1 class="text-2xl font-bold text-gray-800">Pool Creation: Upload & Map</h1>
+                                <p class="mt-1 text-gray-600">Upload and map the pool file to begin the validation process.</p>
+                            </div>
+                            <div class="max-w-2xl mx-auto text-center">
+                                <div class="p-6 border-2 border-dashed border-gray-300 rounded-lg bg-white">
+                                    <p class="font-semibold mb-2">Upload Pool File (.csv)</p>
+                                    <div class="mt-4 flex justify-center items-center space-x-4">
+                                        <select class="block rounded-md border-gray-300 shadow-sm"><option>Select Asset Class</option><option selected>Boda-Boda Loans</option><option>Agri-Finance</option></select>
+                                        <button id="uploadPoolBtn" class="bg-teal-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-teal-700">Upload & Map</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Sub-Step 2b: Pool Mapping -->
+                        <div id="poolMappingSubStep" class="sub-step">
+                             <div class="max-w-4xl mx-auto bg-white border border-gray-200 p-6 rounded-lg">
+                                <h4 class="font-bold text-gray-800 text-lg">Map Pool File Columns</h4>
+                                <p class="text-sm text-gray-600 mt-1">Map the columns from your uploaded file to the required KI fields.</p>
+                                <div id="mappingFieldsContainer" class="mt-4 space-y-3">
+                                    <div class="grid grid-cols-2 gap-4"><span class="font-medium text-gray-500">Your File Column</span><span class="font-medium text-gray-500">KI Required Field</span></div>
+                                    <!-- Mapping fields will be dynamically inserted here -->
+                                </div>
+                                <div class="text-center mt-6">
+                                    <button id="validateMappedPoolBtn" class="bg-teal-600 text-white px-8 py-2.5 rounded-lg font-semibold hover:bg-teal-700">Validate Pool</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Sub-Step 2c: Pool Validation Error -->
+                         <div id="poolValidationErrorSubStep" class="sub-step">
+                            <div class="max-w-3xl mx-auto bg-red-50 border border-red-200 p-4 rounded-lg">
+                                <h4 class="font-bold text-red-800">Validation Complete: Errors Found</h4>
+                                <p class="text-sm text-red-700 mt-1">15,000 loans processed. 250 loans have data errors.</p>
+                                <div class="mt-2 text-xs bg-white p-2 rounded border text-red-900">
+                                    <p>Row 15: Invalid disbursement date format '2025/01/15'. Expected YYYY-MM-DD.</p>
+                                    <p>Row 42: Principal amount is negative (-5000).</p>
+                                </div>
+                                <div class="mt-4 flex space-x-4">
+                                    <button class="bg-red-600 text-white px-4 py-1.5 text-sm rounded-md font-semibold">Download Full Error File</button>
+                                    <button id="reuploadPoolBtn" class="border border-gray-400 text-gray-700 px-4 py-1.5 text-sm rounded-md font-semibold">Re-upload Corrected File</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Sub-Step 2d: Structuring -->
+                        <div id="poolStructuringSubStep" class="sub-step">
+                            <div class="text-center mb-8">
+                                <h1 class="text-2xl font-bold text-gray-800">Simulations and Structuring</h1>
+                                <p class="mt-1 text-gray-600">Apply filters and structure the deal to simulate outcomes.</p>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div class="lg:col-span-1 bg-white p-6 rounded-lg border space-y-6">
+                                    <div>
+                                        <h4 class="font-semibold mb-3">Pool Filters</h4>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">KI Score Range: <span id="kiScoreMinLabel" class="font-bold text-teal-600">650</span> - <span id="kiScoreMaxLabel" class="font-bold text-teal-600">850</span></label>
+                                                <div class="flex space-x-2"><input id="kiScoreMinSlider" type="range" min="300" max="850" value="650"><input id="kiScoreMaxSlider" type="range" min="300" max="850" value="850"></div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Loan Amount (KES): <span id="loanAmountMinLabel" class="font-bold text-teal-600">50k</span> - <span id="loanAmountMaxLabel" class="font-bold text-teal-600">200k</span></label>
+                                                <div class="flex space-x-2"><input id="loanAmountMinSlider" type="range" min="10000" max="250000" step="10000" value="50000"><input id="loanAmountMaxSlider" type="range" min="10000" max="250000" step="10000" value="200000"></div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Residual Tenure (Months): <span id="tenureMinLabel" class="font-bold text-teal-600">6</span> - <span id="tenureMaxLabel" class="font-bold text-teal-600">24</span></label>
+                                                <div class="flex space-x-2"><input id="tenureMinSlider" type="range" min="1" max="48" value="6"><input id="tenureMaxSlider" type="range" min="1" max="48" value="24"></div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Loan Interest Rate (%): <span id="interestRateMinLabel" class="font-bold text-teal-600">18%</span> - <span id="interestRateMaxLabel" class="font-bold text-teal-600">30%</span></label>
+                                                <div class="flex space-x-2"><input id="interestRateMinSlider" type="range" min="12" max="36" value="18"><input id="interestRateMaxSlider" type="range" min="12" max="36" value="30"></div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Counties</label>
+                                                <select id="countiesMultiSelect" multiple></select>
+                                            </div>
+                                            <div class="pt-2"><button id="applyFiltersBtn" class="w-full bg-gray-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-700 text-sm">Apply Pool Filters</button></div>
+                                        </div>
+                                    </div>
+                                    <div class="border-t pt-6">
+                                        <h4 class="font-semibold mb-3">Deal Structure</h4>
+                                        <div class="space-y-4">
+                                            <div class="border rounded-lg p-3">
+                                                <p class="font-semibold text-teal-700">Senior Tranche</p>
+                                                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                                                    <label>Size (%):</label><input type="number" value="80" class="border-gray-300 rounded-md shadow-sm w-full">
+                                                    <label>Coupon (%):</label><input type="number" value="14" class="border-gray-300 rounded-md shadow-sm w-full">
+                                                    <label>Suggested Yield:</label><span id="seniorYield" class="font-bold text-green-600">14.5%</span>
+                                                </div>
+                                            </div>
+                                            <div class="border rounded-lg p-3">
+                                                <p class="font-semibold text-teal-700">Mezzanine Tranche</p>
+                                                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                                                    <label>Size (%):</label><input type="number" value="12" class="border-gray-300 rounded-md shadow-sm w-full">
+                                                    <label>Coupon (%):</label><input type="number" value="18" class="border-gray-300 rounded-md shadow-sm w-full">
+                                                    <label>Suggested Yield:</label><span id="mezzYield" class="font-bold text-green-600">18.2%</span>
+                                                </div>
+                                            </div>
+                                             <div class="border rounded-lg p-3">
+                                                <p class="font-semibold text-teal-700">Equity Tranche</p>
+                                                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                                                    <label>Size (%):</label><input type="number" value="8" class="border-gray-300 rounded-md shadow-sm w-full" disabled>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="border-t pt-6">
+                                        <h4 class="font-semibold mb-3">Sensitivity Analysis</h4>
+                                        <div class="space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Expected Loss Rate (%): <span id="sensitivityLossLabel" class="font-bold text-red-600">4.1%</span></label>
+                                                <input id="sensitivityLossSlider" type="range" min="2" max="10" step="0.1" value="4.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Prepayment Rate (%): <span id="sensitivityPrepaymentLabel" class="font-bold text-blue-600">8.0%</span></label>
+                                                <input id="sensitivityPrepaymentSlider" type="range" min="0" max="20" step="0.5" value="8.0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                            </div>
+                                            <div class="pt-2"><button id="runSensitivitySimulationBtn" class="w-full bg-teal-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-teal-700 text-sm">Run Simulation</button></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="simulationResultsPanel" class="lg:col-span-2 bg-white p-6 rounded-lg border space-y-6 hidden">
+                                    <h4 class="font-semibold text-center">Simulation Results</h4>
+                                    <p id="simulationOriginatorName" class="text-center text-sm text-gray-600 -mt-2"></p>
+                                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
+                                        <div class="bg-gray-50 p-3 rounded-md"><p class="text-sm text-gray-500">Transaction Rating</p><p id="poolRating" class="text-xl font-bold text-teal-600"><button class="ki-score-link" data-score-type="pool" data-name="Simulated Pool">AA-</button></p></div>
+                                        <div class="bg-gray-50 p-3 rounded-md"><p class="text-sm text-gray-500">Selected Loans</p><p id="selectedLoans" class="text-xl font-bold text-teal-600">9,540</p></div>
+                                        <div class="bg-gray-50 p-3 rounded-md"><p class="text-sm text-gray-500">Pool Value (KES)</p><p id="poolValue" class="text-xl font-bold text-teal-600">980M</p></div>
+                                        <div class="bg-gray-50 p-3 rounded-md"><p class="text-sm text-gray-500">W.A. Tenure</p><p id="poolTenure" class="text-xl font-bold text-teal-600">18 mo</p></div>
+                                        <div class="bg-gray-50 p-3 rounded-md col-span-2"><p class="text-sm text-gray-500">Estimated Loss</p><p id="estimatedLoss" class="text-xl font-bold text-red-600">4.1%</p></div>
+                                    </div>
+                                    <div class="border-t pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="chart-container h-56"><canvas id="geoConcentrationChart"></canvas></div>
+                                        <div class="chart-container h-56"><canvas id="kiScoreDistChart"></canvas></div>
+                                        <div class="md:col-span-2 chart-container h-64"><canvas id="waterfallChart"></canvas></div>
+                                    </div>
+                                    <div class="border-t pt-6 text-center space-x-3">
+                                        <button id="finalizePoolBtn" class="bg-teal-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-teal-700">Finalize Pool</button>
+                                        <button class="border border-gray-400 text-gray-700 px-6 py-2 rounded-lg font-semibold">Download Schedules</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Pool Details Page -->
+                <div id="poolDetailsPage" class="page-view">
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h1 class="text-2xl font-bold text-gray-800">Loan Listing for <span id="poolDetailsTitle"></span></h1>
+                        </div>
+                        <div class="bg-white p-5 rounded-lg border shadow-sm">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left text-gray-500">
+                                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                        <tr>
+                                            <th scope="col" class="px-6 py-3">Loan ID</th>
+                                            <th scope="col" class="px-6 py-3">Principal (KES)</th>
+                                            <th scope="col" class="px-6 py-3">Tenure (Mo)</th>
+                                            <th scope="col" class="px-6 py-3">Location</th>
+                                            <th scope="col" class="px-6 py-3">Loan Cycle</th>
+                                            <th scope="col" class="px-6 py-3">Interest Rate</th>
+                                            <th scope="col" class="px-6 py-3">KI Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="loanListingTableBody">
+                                        <!-- Loan rows will be dynamically inserted here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- KI Score Details Page -->
+                <div id="kiScoreDetailsPage" class="page-view">
+                     <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h1 class="text-2xl font-bold text-gray-800" id="kiScoreDetailsTitle"></h1>
+                            <button id="backBtn" class="bg-white text-gray-700 border border-gray-300 px-5 py-2 rounded-lg font-semibold hover:bg-gray-50 text-sm">← Back</button>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg border shadow-sm mb-8">
+                            <h2 class="text-lg font-semibold text-gray-800 mb-3">Top Contributors to Score</h2>
+                            <div id="kiScoreContributors" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                                <!-- Contributor cards will be inserted here -->
+                            </div>
+                        </div>
+                        <div id="kiScoreVariables" class="space-y-6">
+                           <!-- Variable cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KI DealTrack View -->
+            <div id="dealTrackView" class="view">
+                 <div class="bg-white border-b">
+                    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                        <nav id="dealTrackNav" class="flex space-x-8 -mb-px">
+                            <button data-track-view="covenantMonitoring" class="home-tab-link py-4 px-1 text-sm font-medium">Covenant Monitoring</button>
+                            <button data-track-view="insights" class="home-tab-link py-4 px-1 text-sm font-medium">Insights</button>
+                            <button data-track-view="performance" class="home-tab-link py-4 px-1 text-sm font-medium">Performance</button>
+                            <button data-track-view="impact" class="home-tab-link py-4 px-1 text-sm font-medium">Impact</button>
+                        </nav>
+                    </div>
+                </div>
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <!-- Covenant Setup Page -->
+                    <div id="covenantSetupPage" class="page-view">
+                        <div class="max-w-4xl mx-auto">
+                            <div class="text-center mb-8">
+                                <h1 class="text-2xl font-bold text-gray-800">Covenant Setup</h1>
+                                <p class="mt-1 text-gray-600">Define monitoring rules for transaction: <strong id="covenantSetupTitle"></strong></p>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg border shadow-sm mb-6 space-y-4">
+                                <h3 class="font-semibold text-lg text-gray-800 border-b pb-3">Financial Covenants</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 items-center">
+                                    <span>CRAR</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&gt;=</option><option>&lt;=</option></select>
+                                    <div class="relative"><input type="text" value="15" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+                                    
+                                    <span>Gross NPA</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&lt;=</option><option>&gt;=</option></select>
+                                    <div class="relative"><input type="text" value="5" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+
+                                    <span>Net NPA</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&lt;=</option><option>&gt;=</option></select>
+                                    <div class="relative"><input type="text" value="3" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+
+                                    <span>Debt-to-Equity</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&lt;=</option><option>&gt;=</option></select>
+                                    <div class="relative"><input type="text" value="4" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">x</span></div>
+
+                                    <span>Interest Coverage</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&gt;=</option><option>&lt;=</option></select>
+                                    <div class="relative"><input type="text" value="2.0" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">x</span></div>
+
+                                    <span>RoA</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&gt;=</option><option>&lt;=</option></select>
+                                    <div class="relative"><input type="text" value="1.5" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+                                    
+                                    <span>Opex Ratio</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&lt;=</option><option>&gt;=</option></select>
+                                    <div class="relative"><input type="text" value="6" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+
+                                    <span>Collection Eff.</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&gt;=</option><option>&lt;=</option></select>
+                                    <div class="relative"><input type="text" value="98" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+
+                                    <span>Geographic Conc.</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>&lt;=</option><option>&gt;=</option></select>
+                                    <div class="relative"><input type="text" value="30" class="block w-full rounded-md border-gray-300 shadow-sm pr-8"><span class="absolute inset-y-0 right-2 flex items-center text-gray-500">%</span></div>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg border shadow-sm mb-6 space-y-4">
+                                <h3 class="font-semibold text-lg text-gray-800 border-b pb-3">Document Requirements</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 items-center">
+                                    <span>Audited Financials</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>Annually</option><option>Half-Yearly</option><option>Quarterly</option><option>Monthly</option></select>
+                                    <input type="date" value="2026-05-30" class="block w-full rounded-md border-gray-300 shadow-sm">
+                                    
+                                    <span>Unaudited Financials</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>Quarterly</option><option>Annually</option><option>Half-Yearly</option><option>Monthly</option></select>
+                                    <input type="date" value="2025-07-10" class="block w-full rounded-md border-gray-300 shadow-sm">
+
+                                    <span>MIS Portfolio Report</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>Monthly</option><option>Quarterly</option><option>Annually</option><option>Half-Yearly</option></select>
+                                    <input type="date" value="2025-10-01" class="block w-full rounded-md border-gray-300 shadow-sm">
+
+                                    <span>Compliance Certificate</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>Quarterly</option><option>Monthly</option><option>Annually</option><option>Half-Yearly</option></select>
+                                    <input type="date" value="2025-10-01" class="block w-full rounded-md border-gray-300 shadow-sm">
+
+                                    <span>End-Use Certificate</span>
+                                    <select class="block w-full rounded-md border-gray-300 shadow-sm"><option>Half-Yearly</option><option>Quarterly</option><option>Monthly</option><option>Annually</option></select>
+                                    <input type="date" value="2026-07-01" class="block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                            </div>
+                            <div class="text-center mt-8">
+                                <button id="saveCovenantBtn" class="bg-teal-600 text-white px-8 py-2.5 rounded-lg font-semibold hover:bg-teal-700">Save Covenants & Activate Monitoring</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Covenant Monitoring Page (Updated) -->
+                    <div id="covenantMonitoringPage" class="page-view">
+                        <div class="max-w-7xl mx-auto">
+                            <div class="flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4">
+                                <h1 class="text-2xl font-bold text-gray-800">Covenant Monitoring</h1>
+                                <div class="flex items-center space-x-2">
+                                    <label for="transactionSelector" class="text-sm font-medium text-gray-700 whitespace-nowrap">Select Transaction:</label>
+                                    <select id="transactionSelector" class="w-full md:w-64 block rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                        <!-- Options will be populated by JS -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Covenant Status Table -->
+                            <div class="bg-white p-6 rounded-lg border shadow-sm mb-8">
+                                <h3 class="font-semibold text-lg text-gray-800 mb-4">Covenant Status</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left text-gray-500">
+                                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-2">Covenant</th>
+                                                <th class="px-4 py-2">Condition</th>
+                                                <th class="px-4 py-2">Required</th>
+                                                <th class="px-4 py-2">Actual</th>
+                                                <th class="px-4 py-2">Status</th>
+                                                <th class="px-4 py-2 text-center">Trend (3 Mo)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="covenantStatusTableBody">
+                                            <!-- Rows populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                             <!-- Document Status Table -->
+                            <div class="bg-white p-6 rounded-lg border shadow-sm mb-8">
+                                <h3 class="font-semibold text-lg text-gray-800 mb-4">Document Status</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left text-gray-500">
+                                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-2">Document</th>
+                                                <th class="px-4 py-2">Frequency</th>
+                                                <th class="px-4 py-2">Next Due Date</th>
+                                                <th class="px-4 py-2">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="documentStatusTableBody">
+                                            <!-- Rows populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                             <!-- Early Warning System Charts -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h3 class="font-semibold text-center">PAR 90+ Movement</h3>
+                                        <span id="par90EWS" class="text-xs font-bold"></span>
+                                    </div>
+                                    <div class="chart-container h-64"><canvas id="par90Chart"></canvas></div>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h3 class="font-semibold text-center">Collection Efficiency</h3>
+                                        <span id="collectionEffEWS" class="text-xs font-bold"></span>
+                                    </div>
+                                    <div class="chart-container h-64"><canvas id="collectionEffChart"></canvas></div>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h3 class="font-semibold text-center">CRAR Movement</h3>
+                                        <span id="crarEWS" class="text-xs font-bold"></span>
+                                    </div>
+                                    <div class="chart-container h-64"><canvas id="crarChart"></canvas></div>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h3 class="font-semibold text-center">Portfolio Yield</h3>
+                                        <span id="yieldEWS" class="text-xs font-bold"></span>
+                                    </div>
+                                    <div class="chart-container h-64"><canvas id="yieldChart"></canvas></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="insightsPage" class="page-view">
+                         <div class="text-center mb-8">
+                            <h1 class="text-2xl font-bold text-gray-800">Performance Insights</h1>
+                             <p class="mt-1 text-gray-600 max-w-3xl mx-auto">Key observations for transaction: <strong>RMFB-BODA-001</strong></p>
+                        </div>
+                        <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Positive Insight 1 -->
+                            <div class="bg-green-50 border border-green-200 p-6 rounded-lg flex items-start space-x-4">
+                                <div class="w-8 h-8 flex-shrink-0 bg-green-500 rounded-full flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-green-800">Strong Segment Performance</h4>
+                                    <p class="text-green-800 text-sm font-medium mt-1">The Boda-Boda loan portfolio continues to be the bedrock of performance, with PAR30+ consistently below 4.5%. High repayment rates in this core segment are driving overall portfolio stability and cash flow predictability.</p>
+                                </div>
+                            </div>
+                            <!-- Negative Insight 1 -->
+                            <div class="bg-red-50 border border-red-200 p-6 rounded-lg flex items-start space-x-4">
+                                <div class="w-8 h-8 flex-shrink-0 bg-red-500 rounded-full flex items-center justify-center">
+                                     <svg class="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.03-1.742 3.03H4.42c-1.532 0-2.492-1.696-1.742-3.03l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-red-800">Geographic Stress in Key Area</h4>
+                                    <p class="text-red-800 text-sm font-medium mt-1">Kisumu county, the third-highest AUM contributor, has a PAR60 above 8% with collection efficiency less than 95%. This indicates rising stress in a key geographical area, posing a concentration risk that requires targeted intervention.</p>
+                                </div>
+                            </div>
+                            <!-- Positive Insight 2 -->
+                             <div class="bg-green-50 border border-green-200 p-6 rounded-lg flex items-start space-x-4">
+                                <div class="w-8 h-8 flex-shrink-0 bg-green-500 rounded-full flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-green-800">Effective Underwriting Vintage</h4>
+                                    <p class="text-green-800 text-sm font-medium mt-1">Vintage analysis of loans originated in Q4 2024 shows the lowest early-stage delinquency. This strongly suggests that recent underwriting policy improvements are effective and should be maintained or expanded.</p>
+                                </div>
+                            </div>
+                             <!-- Negative Insight 2 -->
+                            <div class="bg-red-50 border border-red-200 p-6 rounded-lg flex items-start space-x-4">
+                                <div class="w-8 h-8 flex-shrink-0 bg-red-500 rounded-full flex items-center justify-center">
+                                     <svg class="w-5 h-8 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.03-1.742 3.03H4.42c-1.532 0-2.492-1.696-1.742-3.03l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-red-800">Risk from First-Cycle Borrowers</h4>
+                                    <p class="text-red-800 text-sm font-medium mt-1">First-cycle borrowers now account for 65% of all new delinquencies in the past 90 days. This highlights a significant risk concentration in the new customer onboarding process, suggesting a need for tighter initial criteria.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="performancePage" class="page-view">
+                        <div class="max-w-7xl mx-auto">
+                             <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                                <h1 class="text-2xl font-bold text-gray-800">Portfolio Performance</h1>
+                                <div class="flex items-center space-x-2">
+                                    <label for="perfTransactionSelector" class="text-sm font-medium text-gray-700 whitespace-nowrap">Select Transaction:</label>
+                                    <select id="perfTransactionSelector" class="w-full md:w-64 block rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                        <!-- Options will be populated by JS -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Summary Cards -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center">
+                                    <p class="text-sm text-gray-500">Principal Outstanding (POS)</p>
+                                    <p class="text-3xl font-bold text-gray-800 mt-1">KES 955M</p>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center">
+                                    <p class="text-sm text-gray-500">Overall Collection Efficiency</p>
+                                    <p class="text-3xl font-bold text-green-600 mt-1">98.2%</p>
+                                </div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center">
+                                    <p class="text-sm text-gray-500">Live Portfolio Count</p>
+                                    <p class="text-3xl font-bold text-gray-800 mt-1">9,450</p>
+                                </div>
+                            </div>
+
+                             <!-- Portfolio Composition -->
+                            <div class="mb-8">
+                                <h2 class="text-xl font-semibold text-gray-700 mb-4">Portfolio Composition</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm"><h3 class="font-semibold text-center mb-2">POS by Loan Purpose</h3><div class="chart-container h-64"><canvas id="posByLoanPurposeChart"></canvas></div></div>
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm"><h3 class="font-semibold text-center mb-2">POS by County</h3><div class="chart-container h-64"><canvas id="posByCountyChart"></canvas></div></div>
+                                </div>
+                            </div>
+
+                             <!-- Delinquency Analysis -->
+                            <div class="mb-8">
+                                <h2 class="text-xl font-semibold text-gray-700 mb-4">Delinquency Analysis (PAR 30+)</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm"><h3 class="font-semibold text-center mb-2">by Loan Purpose</h3><div class="chart-container h-64"><canvas id="parByLoanPurposeChart"></canvas></div></div>
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm"><h3 class="font-semibold text-center mb-2">by County</h3><div class="chart-container h-64"><canvas id="parByCountyChart"></canvas></div></div>
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm"><h3 class="font-semibold text-center mb-2">by Loan Cycle</h3><div class="chart-container h-64"><canvas id="parByLoanCycleChart"></canvas></div></div>
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm"><h3 class="font-semibold text-center mb-2">by KI Score Band</h3><div class="chart-container h-64"><canvas id="parByKiScoreChart"></canvas></div></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Vintage Analysis -->
+                             <div>
+                                <h2 class="text-xl font-semibold text-gray-700 mb-4">Vintage Analysis</h2>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                    <h3 class="font-semibold text-center mb-2">PAR 90+ by Origination Quarter</h3>
+                                    <div class="chart-container h-72"><canvas id="vintageAnalysisChart"></canvas></div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                     <div id="impactPage" class="page-view">
+                        <div class="max-w-7xl mx-auto">
+                             <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                                <h1 class="text-2xl font-bold text-gray-800">Impact Analysis</h1>
+                                <div class="flex items-center space-x-2">
+                                    <label for="impactTransactionSelector" class="text-sm font-medium text-gray-700 whitespace-nowrap">Select Transaction:</label>
+                                    <select id="impactTransactionSelector" class="w-full md:w-64 block rounded-md border-gray-300 shadow-sm sm:text-sm">
+                                        <!-- Options will be populated by JS -->
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Top Level KPIs -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center"><p class="text-sm text-gray-500">Female Borrowers</p><p class="text-2xl font-bold text-teal-600 mt-1">4,158 (44%)</p></div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center"><p class="text-sm text-gray-500">Rural Outreach</p><p class="text-2xl font-bold text-teal-600 mt-1">5,197 (55%)</p></div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center"><p class="text-sm text-gray-500">First-Time Borrowers</p><p class="text-2xl font-bold text-teal-600 mt-1">2,835 (30%)</p></div>
+                                <div class="bg-white p-4 rounded-lg border shadow-sm text-center"><p class="text-sm text-gray-500">Youth Borrowers (&lt;35)</p><p class="text-2xl font-bold text-teal-600 mt-1">3,780 (40%)</p></div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <!-- Left Column -->
+                                <div class="lg:col-span-1 space-y-8">
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                        <h3 class="font-semibold text-gray-800 mb-3">Gender & Social Lens</h3>
+                                        <div class="space-y-3 text-sm">
+                                            <div class="flex justify-between"><span>Value to Women (KES):</span><span class="font-bold">410M</span></div>
+                                            <div class="flex justify-between"><span>Avg. Loan to Women (KES):</span><span class="font-bold">98,600</span></div>
+                                            <div class="flex justify-between"><span>Avg. Loan to Men (KES):</span><span class="font-bold">103,000</span></div>
+                                        </div>
+                                        <div class="chart-container h-48 mt-4"><canvas id="genderPerformanceChart"></canvas></div>
+                                    </div>
+                                    <div class="bg-white p-4 rounded-lg border shadow-sm">
+                                        <h3 class="font-semibold text-gray-800 mb-3">Geographic Outreach</h3>
+                                        <div class="chart-container h-56"><canvas id="ruralUrbanChart"></canvas></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Right Column -->
+                                <div class="lg:col-span-2 space-y-8">
+                                    <div class="bg-white p-6 rounded-lg border shadow-sm">
+                                        <h3 class="font-semibold text-gray-800 mb-4">End-Use & SDG Alignment</h3>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div>
+                                                <h4 class="font-medium text-center text-sm mb-2">End-Use Sector</h4>
+                                                <div class="chart-container h-48"><canvas id="sectorDoughnutChart"></canvas></div>
+                                            </div>
+                                             <div>
+                                                <h4 class="font-medium text-center text-sm mb-2">SDG Alignment</h4>
+                                                <div class="chart-container h-48"><canvas id="sdgDoughnutChart"></canvas></div>
+                                                <div class="text-xs space-y-1 mt-2 text-center">
+                                                    <p><span class="font-bold text-teal-600">48%</span> No Poverty (SDG 1)</p>
+                                                    <p><span class="font-bold text-teal-600">32%</span> Decent Work & Econ. Growth (SDG 8)</p>
+                                                    <p><span class="font-bold text-teal-600">20%</span> Reduced Inequality (SDG 10)</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white p-6 rounded-lg border shadow-sm">
+                                        <h3 class="font-semibold text-gray-800 mb-4">Economic Opportunity</h3>
+                                         <div class="chart-container h-64"><canvas id="borrowerProfileChart"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // State Management
+            const state = { currentView: 'dealScreen', currentPage: 'dealScreenHomePage', previousPage: null, charts: {}, transactions: [], originators: [], availablePortfolios: [], currentTransactionId: null, covenantData: {} };
+
+            // Selectors
+            const app = document.getElementById('app');
+            const dealScreenBtn = document.getElementById('dealScreenBtn');
+            const dealTrackBtn = document.getElementById('dealTrackBtn');
+            const dealScreenView = document.getElementById('dealScreenView');
+            const dealTrackView = document.getElementById('dealTrackView');
+            const pageViews = document.querySelectorAll('.page-view');
+            const homeBtn = document.getElementById('homeBtn');
+            
+            // Home Page Selectors
+            const homeTabsNav = document.getElementById('homeTabsNav');
+            const homeTabContents = document.querySelectorAll('.home-tab-content');
+            const addNewOriginatorBtn = document.getElementById('addNewOriginatorBtn');
+            const createNewTransactionBtn = document.getElementById('createNewTransactionBtn');
+            
+            // Originator Onboarding Selectors
+            const uploadOriginatorFilesBtn = document.getElementById('uploadOriginatorFilesBtn');
+            const originatorUpload = document.getElementById('originatorUpload');
+            const originatorAnalyzing = document.getElementById('originatorAnalyzing');
+            const originatorAnalysisResult = document.getElementById('originatorAnalysisResult');
+            const onboardOriginatorBtn = document.getElementById('onboardOriginatorBtn');
+            const analysisOriginatorName = document.getElementById('analysisOriginatorName');
+            const analysisOriginatorCategory = document.getElementById('analysisOriginatorCategory');
+            const originatorInsightsContainer = document.getElementById('originatorInsightsContainer');
+
+            // Pool Creation Selectors
+            const poolSubSteps = document.querySelectorAll('#poolCreationPage .sub-step');
+            const uploadPoolBtn = document.getElementById('uploadPoolBtn');
+            const validateMappedPoolBtn = document.getElementById('validateMappedPoolBtn');
+            const reuploadPoolBtn = document.getElementById('reuploadPoolBtn');
+            const finalizePoolBtn = document.getElementById('finalizePoolBtn');
+            const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+            const runSensitivitySimulationBtn = document.getElementById('runSensitivitySimulationBtn');
+            const simulationResultsPanel = document.getElementById('simulationResultsPanel');
+            const simulationOriginatorName = document.getElementById('simulationOriginatorName');
+            
+            // Pool Details Page Selectors
+            const poolDetailsTitle = document.getElementById('poolDetailsTitle');
+            const loanListingTableBody = document.getElementById('loanListingTableBody');
+
+            // KI Score Details Page Selectors
+            const kiScoreDetailsPage = document.getElementById('kiScoreDetailsPage');
+            const kiScoreDetailsTitle = document.getElementById('kiScoreDetailsTitle');
+            const kiScoreVariables = document.getElementById('kiScoreVariables');
+            const kiScoreContributors = document.getElementById('kiScoreContributors');
+            const backBtn = document.getElementById('backBtn');
+
+            // Structuring Sliders & Labels
+            const kiScoreMinSlider = document.getElementById('kiScoreMinSlider');
+            const kiScoreMaxSlider = document.getElementById('kiScoreMaxSlider');
+            const kiScoreMinLabel = document.getElementById('kiScoreMinLabel');
+            const kiScoreMaxLabel = document.getElementById('kiScoreMaxLabel');
+
+            const loanAmountMinSlider = document.getElementById('loanAmountMinSlider');
+            const loanAmountMaxSlider = document.getElementById('loanAmountMaxSlider');
+            const loanAmountMinLabel = document.getElementById('loanAmountMinLabel');
+            const loanAmountMaxLabel = document.getElementById('loanAmountMaxLabel');
+
+            const tenureMinSlider = document.getElementById('tenureMinSlider');
+            const tenureMaxSlider = document.getElementById('tenureMaxSlider');
+            const tenureMinLabel = document.getElementById('tenureMinLabel');
+            const tenureMaxLabel = document.getElementById('tenureMaxLabel');
+
+            const interestRateMinSlider = document.getElementById('interestRateMinSlider');
+            const interestRateMaxSlider = document.getElementById('interestRateMaxSlider');
+            const interestRateMinLabel = document.getElementById('interestRateMinLabel');
+            const interestRateMaxLabel = document.getElementById('interestRateMaxLabel');
+
+            const sensitivityLossSlider = document.getElementById('sensitivityLossSlider');
+            const sensitivityLossLabel = document.getElementById('sensitivityLossLabel');
+            const sensitivityPrepaymentSlider = document.getElementById('sensitivityPrepaymentSlider');
+            const sensitivityPrepaymentLabel = document.getElementById('sensitivityPrepaymentLabel');
+
+            
+            // DealTrack Selectors
+            const dealTrackNav = document.getElementById('dealTrackNav');
+            const dealTrackPages = document.querySelectorAll('#dealTrackView .page-view');
+            const covenantSetupTitle = document.getElementById('covenantSetupTitle');
+            const saveCovenantBtn = document.getElementById('saveCovenantBtn');
+            const activeTransactionsTableBody = document.getElementById('activeTransactionsTableBody');
+            const originatorsTableBody = document.getElementById('originatorsTableBody');
+            const availablePortfoliosTableBody = document.getElementById('availablePortfoliosTableBody');
+            
+            // Covenant Monitoring Page Selectors
+            const transactionSelector = document.getElementById('transactionSelector');
+            const perfTransactionSelector = document.getElementById('perfTransactionSelector');
+            const impactTransactionSelector = document.getElementById('impactTransactionSelector');
+            const covenantStatusTableBody = document.getElementById('covenantStatusTableBody');
+            const documentStatusTableBody = document.getElementById('documentStatusTableBody');
+            const ewsPar90 = document.getElementById('par90EWS');
+            const ewsCollectionEff = document.getElementById('collectionEffEWS');
+            const ewsCrar = document.getElementById('crarEWS');
+            const ewsYield = document.getElementById('yieldEWS');
+
+            // Transaction Type Page
+            const transactionTypePage = document.getElementById('transactionTypePage');
+
+            // Finalize Pool Modal
+            const finalizePoolModal = document.createElement('div');
+            finalizePoolModal.id = 'finalizePoolModal';
+            finalizePoolModal.className = 'modal fixed inset-0 bg-gray-600 bg-opacity-50 items-center justify-center z-50';
+            finalizePoolModal.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                    <h3 class="text-lg font-bold mb-4">Finalize Transaction</h3>
+                    <p class="text-sm text-gray-600 mb-2">Please provide a name for this new transaction portfolio.</p>
+                    <input type="text" id="newTransactionName" placeholder="e.g., RMFB-BODA-002" class="w-full border-gray-300 rounded-md shadow-sm">
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button id="cancelFinalizeBtn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button id="saveTransactionBtn" class="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700">Save Transaction</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(finalizePoolModal);
+
+            const finalizeTransactionNameInput = document.getElementById('newTransactionName');
+            const cancelFinalizeBtn = document.getElementById('cancelFinalizeBtn');
+            const saveTransactionBtn = document.getElementById('saveTransactionBtn');
+
+            let countiesMultiSelect;
+
+
+            function initializeData() {
+                // FIX: Removed Rafiki from initial list
+                state.originators = [
+                    { id: 'mc', name: 'Momentum Credit', score: 'BBB (690)', par: '5.5%', yield: '24.0%', aum: '3.2B' },
+                    { id: 'ak', name: 'Asa Kenya', score: 'AA- (810)', par: '3.8%', yield: '22.5%', aum: '6.8B' },
+                    { id: 'faulu', name: 'Faulu Microfinance Bank', score: 'A (750)', par: '4.8%', yield: '20.5%', aum: '4.5B' },
+                    { id: 'uwezo', name: 'Uwezo MFB', score: 'BB (650)', par: '6.2%', yield: '25.0%', aum: '2.1B' },
+                    { id: 'smep', name: 'SMEP Microfinance Bank', score: 'A- (720)', par: '4.5%', yield: '21.0%', aum: '3.9B' },
+                    { id: 'juhudi', name: 'Juhudi Kilimo', score: 'A+ (790)', par: '4.0%', yield: '23.0%', aum: '5.5B' },
+                    { id: 'mogo', name: 'Mogo Kenya', score: 'BBB+ (710)', par: '5.1%', yield: '26.0%', aum: '4.1B' },
+                    { id: 'platcorp', name: 'Platinum Credit', score: 'A (760)', par: '4.3%', yield: '23.5%', aum: '6.2B' },
+                    { id: 'izwe', name: 'Izwe Kenya', score: 'BBB (680)', par: '5.8%', yield: '24.5%', aum: '2.8B' }
+                ];
+
+                state.transactions = [
+                    { id: 'MC-AGRI-003', name: 'MC-AGRI-003', originator: 'Momentum Credit', structure: 'Securitisation', rating: 'A+', tenure: '24 Months', yield: '19.5%', covenantsSet: false },
+                    { id: 'ASA-SME-005', name: 'ASA-SME-005', originator: 'Asa Kenya', structure: 'Securitisation', rating: 'AA', tenure: '36 Months', yield: '18.0%', covenantsSet: true },
+                    { id: 'RMFB-BODA-001', name: 'RMFB-BODA-001', originator: 'Rafiki MFB', structure: 'Term Loan', rating: 'AA-', tenure: '18 Months', yield: '21.0%', covenantsSet: true },
+                    { id: 'MC-VEHICLE-001', name: 'MC-VEHICLE-001', originator: 'Momentum Credit', structure: 'Term Loan', rating: 'A', tenure: '24 Months', yield: '22.5%', covenantsSet: true },
+                    { id: 'PLAT-SAL-012', name: 'PLAT-SAL-012', originator: 'Platinum Credit', structure: 'Securitisation', rating: 'A+', tenure: '30 Months', yield: '20.0%', covenantsSet: true },
+                    { id: 'FAULU-BIZ-008', name: 'FAULU-BIZ-008', originator: 'Faulu MFB', structure: 'Term Loan', rating: 'A', tenure: '24 Months', yield: '19.8%', covenantsSet: false },
+                    { id: 'JUHUDI-AGRI-021', name: 'JUHUDI-AGRI-021', originator: 'Juhudi Kilimo', structure: 'Securitisation', rating: 'AA-', tenure: '36 Months', yield: '18.5%', covenantsSet: true },
+                    { id: 'MOGO-LOGBOOK-050', name: 'MOGO-LOGBOOK-050', originator: 'Mogo Kenya', structure: 'Term Loan', rating: 'BBB+', tenure: '18 Months', yield: '24.0%', covenantsSet: true },
+                    { id: 'IZWE-PERS-015', name: 'IZWE-PERS-015', originator: 'Izwe Kenya', structure: 'Term Loan', rating: 'BBB', tenure: '20 Months', yield: '23.0%', covenantsSet: false },
+                    { id: 'SMEP-EDU-004', name: 'SMEP-EDU-004', originator: 'SMEP MFB', structure: 'Securitisation', rating: 'A-', tenure: '12 Months', yield: '19.0%', covenantsSet: true },
+                ];
+                
+                state.availablePortfolios = [
+                     { id: 'rmfb-agri-25', name: 'Agri-Finance Jun 2025', originator: 'Rafiki MFB', assetClass: 'Agri-Finance', size: '750M', tenure: '24 Months', par: '3.5%' },
+                     { id: 'ak-sme-25', name: 'SME Capital Jun 2025', originator: 'Asa Kenya', assetClass: 'SME Capital', size: '1.5B', tenure: '36 Months', par: '3.1%' },
+                     { id: 'mc-boda-25', name: 'Boda-Boda May 2025', originator: 'Momentum Credit', assetClass: 'Boda-Boda', size: '450M', tenure: '18 Months', par: '5.2%' },
+                     { id: 'plat-checkoff-25', name: 'Checkoff Jul 2025', originator: 'Platinum Credit', assetClass: 'Checkoff', size: '2.0B', tenure: '48 Months', par: '2.9%' },
+                     { id: 'faulu-group-25', name: 'Group Loans Jul 2025', originator: 'Faulu MFB', assetClass: 'Group Loans', size: '600M', tenure: '12 Months', par: '4.1%' },
+                ];
+
+                initializeCovenantData();
+                renderOriginators();
+                renderActiveTransactions();
+                renderAvailablePortfolios();
+            }
+
+            function initializeCovenantData() {
+                const generateChartData = (start, trend, volatility, breach, isUpwardBreach, willBreach) => {
+                    const data = { actuals: [], estimates: [], labels: [], breachLine: [], predictedBreach: false };
+                    let currentValue = start;
+                    const today = new Date('2025-07-01'); // Set a fixed "today" for consistency
+
+                    // Generate 12 months of historical data + current month
+                    for (let i = -12; i <= 0; i++) {
+                        const monthDate = new Date(today);
+                        monthDate.setMonth(today.getMonth() + i);
+                        data.labels.push(monthDate);
+                        data.breachLine.push(breach);
+                        data.actuals.push(currentValue);
+                        currentValue += trend + (Math.random() - 0.5) * volatility;
+                    }
+                    
+                    // Ensure current value is not in breach for EWS
+                    if (willBreach) {
+                        if (isUpwardBreach) data.actuals[data.actuals.length - 1] = Math.min(data.actuals[data.actuals.length - 1], breach * 0.99);
+                        else data.actuals[data.actuals.length - 1] = Math.max(data.actuals[data.actuals.length - 1], breach * 1.01);
+                    }
+
+                    // Generate 6 months of forecast data
+                    data.estimates = new Array(13).fill(null); // 12 historical + 1 current = 13 nulls
+                    let forecastValue = data.actuals[data.actuals.length - 1]; // Start forecast from last actual
+                    for (let i = 1; i <= 6; i++) {
+                        const monthDate = new Date(today);
+                        monthDate.setMonth(today.getMonth() + i);
+                        data.labels.push(monthDate);
+                        data.breachLine.push(breach);
+                        
+                        // If it's meant to breach, use a stronger trend for the forecast
+                        const forecastTrend = willBreach ? trend * 2.5 : trend;
+                        forecastValue += forecastTrend;
+                        data.estimates.push(forecastValue);
+
+                        if (!data.predictedBreach && willBreach) {
+                            if (isUpwardBreach && forecastValue > breach) data.predictedBreach = true;
+                            if (!isUpwardBreach && forecastValue < breach) data.predictedBreach = true;
+                        }
+                    }
+                    return data;
+                };
+
+                state.transactions.filter(t => t.covenantsSet).forEach(tx => {
+                    state.covenantData[tx.id] = {
+                        covenants: [
+                            { name: 'Gross NPA', condition: '<=', required: '5.0%', actual: '5.8%', status: 'breached', trend: '↗' },
+                            { name: 'Interest Coverage', condition: '>=', required: '2.0x', actual: '1.8x', status: 'breached', trend: '↘' },
+                            { name: 'CRAR', condition: '>=', required: '15.0%', actual: '15.2%', status: 'at_risk', trend: '↘' },
+                            { name: 'Net NPA', condition: '<=', required: '3.0%', actual: '2.8%', status: 'compliant', trend: '→' },
+                            { name: 'Collection Efficiency', condition: '>=', required: '98%', actual: '98.2%', status: 'compliant', trend: '→' },
+                            { name: 'PAR 90+', condition: '<=', required: '4.0%', actual: '3.8%', status: 'compliant', trend: '→' },
+                        ],
+                        documents: [
+                            { name: 'MIS Portfolio Report', frequency: 'Monthly', nextDue: '31-Jul-2025', status: 'submitted' },
+                            { name: 'Unaudited Financials', frequency: 'Quarterly', nextDue: '15-Aug-2025', status: 'pending' },
+                        ],
+                        charts: {
+                            par90: { ...generateChartData(3.2, -0.01, 0.1, 4.0, true, false) }, // Stable
+                            collectionEff: { ...generateChartData(99.2, 0.01, 0.2, 98.0, false, false) }, // Stable
+                            crar: { ...generateChartData(15.8, -0.1, 0.2, 15.0, false, true) }, // EWS Breach
+                            yield: { ...generateChartData(21.0, 0, 0.1, 19.0, false, false) } // Stable
+                        }
+                    };
+                });
+            }
+
+            function renderOriginators() {
+                originatorsTableBody.innerHTML = '';
+                state.originators.forEach(o => {
+                    const row = `
+                        <tr class="bg-white border-b">
+                            <td class="px-6 py-4 font-medium text-gray-900">${o.name}</td>
+                            <td class="px-6 py-4 font-semibold text-teal-600"><button class="ki-score-link" data-score-type="originator" data-name="${o.name}">${o.score}</button></td>
+                            <td class="px-6 py-4 font-medium text-red-600">${o.par}</td>
+                            <td class="px-6 py-4 font-medium text-green-600">${o.yield}</td>
+                            <td class="px-6 py-4 font-bold text-gray-800">${o.aum}</td>
+                        </tr>
+                    `;
+                    originatorsTableBody.innerHTML += row;
+                });
+            }
+
+            function renderActiveTransactions() {
+                state.transactions.sort((a, b) => {
+                    if (a.structure === 'Securitisation' && b.structure !== 'Securitisation') return -1;
+                    if (a.structure !== 'Securitisation' && b.structure === 'Securitisation') return 1;
+                    return 0;
+                });
+
+                activeTransactionsTableBody.innerHTML = '';
+                state.transactions.forEach(tx => {
+                    const actionButton = tx.covenantsSet 
+                        ? `<button class="view-performance-btn font-medium text-teal-600 hover:underline" data-tx-id="${tx.id}">View Performance</button>`
+                        : `<button class="setup-covenant-btn font-medium text-orange-600 hover:underline" data-tx-id="${tx.id}">Setup Covenant</button>`;
+
+                    const row = `
+                        <tr class="bg-white border-b">
+                            <td class="px-6 py-4 font-medium text-gray-900"><button class="pool-details-link text-teal-600 hover:underline" data-pool-name="${tx.name}">${tx.name}</button></td>
+                            <td class="px-6 py-4">${tx.originator}</td>
+                            <td class="px-6 py-4">${tx.structure}</td>
+                            <td class="px-6 py-4 font-semibold text-green-500"><button class="ki-score-link" data-score-type="pool" data-name="${tx.name}">${tx.rating}</button></td>
+                            <td class="px-6 py-4">${tx.tenure}</td>
+                            <td class="px-6 py-4">${tx.yield}</td>
+                            <td class="px-6 py-4 text-center">${actionButton}</td>
+                        </tr>
+                    `;
+                    activeTransactionsTableBody.innerHTML += row;
+                });
+            }
+
+            function renderAvailablePortfolios() {
+                availablePortfoliosTableBody.innerHTML = '';
+                state.availablePortfolios.forEach(p => {
+                    const row = `
+                        <tr class="bg-white border-b">
+                            <td class="px-6 py-4 font-medium text-gray-900">${p.name}</td>
+                            <td class="px-6 py-4">${p.originator}</td>
+                            <td class="px-6 py-4">${p.assetClass}</td>
+                            <td class="px-6 py-4">${p.size}</td>
+                            <td class="px-6 py-4">${p.tenure}</td>
+                            <td class="px-6 py-4">${p.par}</td>
+                            <td class="px-6 py-4 text-center"><button class="font-medium text-teal-600 hover:underline">Structure Deal</button></td>
+                        </tr>
+                    `;
+                    availablePortfoliosTableBody.innerHTML += row;
+                });
+            }
+
+            function updateMainView(targetView, txId = null) {
+                state.currentView = targetView;
+                dealScreenView.classList.toggle('active', state.currentView === 'dealScreen');
+                dealTrackView.classList.toggle('active', state.currentView === 'dealTrack');
+                dealScreenBtn.classList.toggle('active', state.currentView === 'dealScreen');
+                dealTrackBtn.classList.toggle('active', state.currentView === 'dealTrack');
+
+                if(targetView === 'dealTrack') {
+                    populateTransactionSelector(txId);
+                }
+            }
+
+            function showPage(pageId) {
+                state.previousPage = state.currentPage;
+                state.currentPage = pageId;
+                pageViews.forEach(page => page.classList.toggle('active', page.id === pageId));
+            }
+            
+            function updateDealTrackPage(pageId, txId = null) {
+                dealTrackPages.forEach(page => page.classList.toggle('active', page.id === pageId));
+                const currentTxId = txId || transactionSelector.value;
+                if (pageId === 'covenantMonitoringPage') {
+                    renderCovenantMonitoringPage(currentTxId);
+                } else if (pageId === 'performancePage') {
+                    renderPerformancePage(currentTxId);
+                } else if (pageId === 'impactPage') {
+                    renderImpactPage(currentTxId);
+                }
+            }
+
+            function goBack() {
+                if (state.previousPage) {
+                    showPage(state.previousPage);
+                } else {
+                    showPage('dealScreenHomePage');
+                }
+            }
+
+            function updateHomeTab(targetTab) {
+                homeTabsNav.querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === targetTab));
+                homeTabContents.forEach(content => content.classList.toggle('active', content.id === `${targetTab}Tab`));
+            }
+            
+            function updatePoolSubStep(targetSubStepId) {
+                poolSubSteps.forEach(sub => sub.classList.remove('active'));
+                document.getElementById(targetSubStepId)?.classList.add('active');
+            }
+
+            function createOrUpdateChart(chartId, config) {
+                const ctx = document.getElementById(chartId)?.getContext('2d');
+                if (!ctx) return;
+                if (state.charts[chartId]) state.charts[chartId].destroy();
+                state.charts[chartId] = new Chart(ctx, config);
+            }
+            
+            function renderVariables(container, title, variables) {
+                let html = `<div class="bg-white p-5 rounded-lg border shadow-sm"><h3 class="text-md font-semibold text-gray-700 mb-4 border-b pb-2">${title}</h3><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">`;
+                variables.forEach(v => {
+                    html += `<div><p class="text-xs text-gray-500">${v.label}</p><p class="text-sm font-medium text-gray-800">${v.value}</p></div>`;
+                });
+                html += `</div></div>`;
+                container.innerHTML += html;
+            }
+
+            function showKiScoreDetails(type, name, id) {
+                const scoreData = {
+                    originator: {
+                        title: `KI Score Details for ${name}`,
+                        contributors: [
+                            { label: 'Strong Capitalization', value: 'CRAR: 18.5%', icon: '✅' },
+                            { label: 'Low NPAs', value: 'PAR 90+: 4.2%', icon: '✅' },
+                            { label: 'Diversified Portfolio', value: 'Top 3 products < 60%', icon: '✅' }
+                        ],
+                        cards: [
+                            { title: 'Financial Health', variables: [
+                                { label: 'CRAR', value: '18.5%' }, { label: 'Debt-to-Equity', value: '2.1' }, { label: 'Return on Assets (RoA)', value: '2.8%' }, { label: 'Return on Equity (RoE)', value: '15.2%' }, { label: 'Net Interest Margin', value: '8.1%' }, { label: 'Cost-to-Income Ratio', value: '45%' }, { label: 'Liquidity Ratio', value: '1.5' }, { label: 'Portfolio Growth (YoY)', value: '15%' }, { label: 'Operating Expense Ratio', value: '4.5%' }, { label: 'Provision Coverage Ratio', value: '75%' }
+                            ]},
+                            { title: 'Portfolio Quality', variables: [
+                                { label: '90+ DPD % (PAR 90+)', value: '4.2%' }, { label: 'Write-off Ratio', value: '1.1%' }, { label: 'Collection Efficiency', value: '98.5%' }, { label: '30+ DPD %', value: '5.1%' }, { label: 'Avg. Seasoning', value: '14 Months' }, { label: 'NPA by 2023 Vintage', value: '3.8%' }, { label: 'Geographic Diversification', value: 'High (8 regions)' }, { label: 'Product Diversification', value: 'High (5+ products)' }
+                            ]}
+                        ]
+                    },
+                    pool: {
+                        title: `Transaction Rating Details for ${name}`,
+                        contributors: [
+                            { label: 'High Avg. Loan Score', value: 'Avg. Score: 710', icon: '👍' },
+                            { label: 'Low Geographic Risk', value: 'Top County < 25%', icon: '👍' },
+                            { label: 'Short Avg. Tenure', value: 'W.A. Tenure: 18 Mo', icon: '👍' }
+                        ],
+                        cards: [
+                           { title: 'Pool Composition', variables: [
+                                { label: 'W.A. KI Score', value: '710' }, { label: 'W.A. Tenure', value: '18 Months' }, { label: 'W.A. Interest Rate', value: '24.5%' }, { label: 'Loan Count', value: '9,540' }, { label: 'Total Pool Value', value: 'KES 980M' }, { label: 'Standard Deviation of Scores', value: '45.2' }, { label: 'W.A. LTV', value: '78%' }, { label: 'W.A. DTI Ratio', value: '0.45' }
+                            ]},
+                            { title: 'Risk Metrics', variables: [
+                               { label: 'Top County Concentration', value: 'Nairobi (22%)' }, { label: 'Top 3 County Concentration', value: '45%' }, { label: 'Product Concentration', value: 'Boda-Boda (100%)' }, { label: 'Expected Loss (EL)', value: '4.1%' }, { label: 'Predicted Default Rate', value: '5.5%' }, { label: 'Predicted Prepayment Rate', value: '8.0%' }
+                            ]},
+                            { title: 'Eligibility Criteria', variables: [
+                               { label: 'Min KI Score', value: '650' }, { label: 'Max Loan Amount', value: 'KES 250,000' }, { label: 'Max Residual Tenure', value: '24 Months' }, { label: 'Min Credit History', value: '12 Months' }, { label: 'Excluded Geographies', value: 'None' }, { label: 'Loan Cycle', value: '> 1' }
+                            ]}
+                        ]
+                    },
+                    loan: {
+                        title: `KI Score Details for Loan #${id}`,
+                        contributors: [
+                            { label: 'Excellent Repayment', value: '0 defaults on record', icon: '💯' },
+                            { label: 'Long Credit History', value: '36 Months', icon: '💯' },
+                            { label: 'Low DTI Ratio', value: '0.4', icon: '💯' }
+                        ],
+                        cards: [
+                            { title: 'Customer Bureau Data', variables: [
+                                { label: 'Credit Bureau Score', value: '720' }, { label: 'Inquiries (Last 6 Mo)', value: '1' }, { label: 'Total Active Tradelines', value: '4' }, { label: 'Credit Utilization Ratio', value: '35%' }, { label: 'Age of Oldest Credit Line', value: '48 Months' }, { label: 'Delinquent Accounts', value: '0' }
+                            ]},
+                            { title: 'Customer Financials & Stability', variables: [
+                                { label: 'Stated Monthly Income', value: 'KES 80,000' }, { label: 'Debt-to-Income (DTI) Ratio', value: '0.4' }, { label: 'Bank Acct. Balance Trend', value: 'Increasing' }, { label: 'Avg. Monthly Transactions', value: '25' }, { label: 'Customer Vintage', value: '4 Years' }, { label: 'Employment Status', value: 'Salaried' }
+                            ]},
+                            { title: 'Loan & Behavioral Data', variables: [
+                                { label: 'Loan Amount', value: 'KES 150,000' }, { label: 'Interest Rate', value: '25%' }, { label: 'Tenure', value: '24 Months' }, { label: 'Loan-to-Value (LTV)', value: '80%' }, { label: 'Loan Cycle with Lender', value: '3' }, { label: 'Repayment History', value: 'No Missed Payments' }, { label: 'Loan Purpose', value: 'Business Expansion' }
+                            ]}
+                        ]
+                    }
+                };
+
+                const data = scoreData[type];
+                if (!data) return;
+
+                kiScoreDetailsTitle.textContent = data.title;
+                kiScoreContributors.innerHTML = data.contributors.map(c => `<div class="bg-gray-100 p-3 rounded-lg"><p class="text-3xl">${c.icon}</p><p class="text-sm font-semibold text-gray-800 mt-1">${c.label}</p><p class="text-xs text-gray-500">${c.value}</p></div>`).join('');
+                kiScoreVariables.innerHTML = '';
+                data.cards.forEach(card => renderVariables(kiScoreVariables, card.title, card.variables));
+                
+                showPage('kiScoreDetailsPage');
+            }
+
+            function showPoolDetails(poolName) {
+                poolDetailsTitle.textContent = poolName;
+                loanListingTableBody.innerHTML = ''; // Clear previous results
+                
+                const locations = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret'];
+
+                for (let i = 1; i <= 20; i++) {
+                    const loanId = 'LAN' + String(1000 + i).padStart(4, '0');
+                    const principal = (Math.floor(Math.random() * 20) + 5) * 10000;
+                    const tenure = Math.floor(Math.random() * 18) + 6;
+                    const score = Math.floor(Math.random() * 250) + 600;
+                    const location = locations[i % locations.length];
+                    const cycle = Math.floor(i / 5) + 1;
+                    const interestRate = (Math.random() * 12 + 18).toFixed(1); // Random rate between 18 and 30
+                    
+                    const row = `
+                        <tr class="bg-white border-b">
+                            <td class="px-6 py-4 font-medium text-gray-900">${loanId}</td>
+                            <td class="px-6 py-4">${principal.toLocaleString()}</td>
+                            <td class="px-6 py-4">${tenure}</td>
+                            <td class="px-6 py-4">${location}</td>
+                            <td class="px-6 py-4">${cycle}</td>
+                            <td class="px-6 py-4">${interestRate}%</td>
+                            <td class="px-6 py-4 font-semibold text-teal-600">
+                                <button class="ki-score-link" data-score-type="loan" data-name="${loanId}" data-id="${loanId}">${score}</button>
+                            </td>
+                        </tr>
+                    `;
+                    loanListingTableBody.innerHTML += row;
+                }
+                showPage('poolDetailsPage');
+            }
+
+
+            // --- Event Listeners ---
+            app.addEventListener('click', (e) => {
+                const kiScoreLink = e.target.closest('.ki-score-link');
+                if (kiScoreLink) {
+                    const type = kiScoreLink.dataset.scoreType;
+                    const name = kiScoreLink.dataset.name;
+                    const id = kiScoreLink.dataset.id;
+                    showKiScoreDetails(type, name, id);
+                    return;
+                }
+
+                const poolDetailsLink = e.target.closest('.pool-details-link');
+                if (poolDetailsLink) {
+                    const poolName = poolDetailsLink.dataset.poolName;
+                    showPoolDetails(poolName);
+                    return;
+                }
+                
+                const setupCovenantBtn = e.target.closest('.setup-covenant-btn');
+                if(setupCovenantBtn) {
+                    const txId = setupCovenantBtn.dataset.txId;
+                    state.currentTransactionId = txId;
+                    covenantSetupTitle.textContent = txId;
+                    updateMainView('dealTrack');
+                    updateDealTrackPage('covenantSetupPage');
+                    dealTrackNav.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                    return;
+                }
+
+                const viewPerformanceBtn = e.target.closest('.view-performance-btn');
+                if (viewPerformanceBtn) {
+                    const txId = viewPerformanceBtn.dataset.txId;
+                    state.currentTransactionId = txId;
+                    updateMainView('dealTrack', txId);
+                    dealTrackNav.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                    const monitoringTab = dealTrackNav.querySelector('[data-track-view="covenantMonitoring"]');
+                    if(monitoringTab) monitoringTab.classList.add('active');
+                    updateDealTrackPage('covenantMonitoringPage', txId);
+                    return;
+                }
+
+                const txTypeBtn = e.target.closest('.tx-type-select-btn');
+                if(txTypeBtn) {
+                    const type = txTypeBtn.dataset.txType;
+                    if (type === 'Securitisation') {
+                        showPage('poolCreationPage');
+                        updatePoolSubStep('poolUploadSubStep');
+                    }
+                    return;
+                }
+            });
+
+            // Main View Navigation
+            dealScreenBtn.addEventListener('click', () => updateMainView('dealScreen'));
+            dealTrackBtn.addEventListener('click', () => {
+                updateMainView('dealTrack');
+                dealTrackNav.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                const firstTab = dealTrackNav.querySelector('button');
+                if (firstTab) {
+                    firstTab.classList.add('active');
+                    const firstTxId = state.transactions.find(t => t.covenantsSet)?.id;
+                    updateDealTrackPage(firstTab.dataset.trackView + 'Page', firstTxId);
+                }
+            });
+            homeBtn.addEventListener('click', () => showPage('dealScreenHomePage'));
+            backBtn.addEventListener('click', goBack);
+            
+            // Home Page Tabs
+            homeTabsNav.addEventListener('click', (e) => {
+                if(e.target.tagName === 'BUTTON') {
+                    updateHomeTab(e.target.dataset.tab);
+                }
+            });
+
+            // Workflow Initiation
+            addNewOriginatorBtn.addEventListener('click', () => showPage('originatorOnboardingPage'));
+            createNewTransactionBtn.addEventListener('click', () => {
+                showPage('transactionTypePage');
+            });
+            
+            function renderOriginatorInsights() {
+                 originatorInsightsContainer.innerHTML = `
+                    <div class="bg-green-50 border border-green-200 p-4 rounded-lg flex items-start space-x-4">
+                        <div class="w-8 h-8 flex-shrink-0 bg-green-500 rounded-full flex items-center justify-center text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-green-800">High-Performing Asset Class</h4>
+                            <p class="text-sm text-green-700 mt-1">The Agri-Finance portfolio is a standout performer, showing the lowest PAR 90+ (3.5%) and presenting a strong case for securitization or targeted term loan financing.</p>
+                        </div>
+                    </div>
+                     <div class="bg-green-50 border border-green-200 p-4 rounded-lg flex items-start space-x-4">
+                        <div class="w-8 h-8 flex-shrink-0 bg-green-500 rounded-full flex items-center justify-center text-white">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-green-800">Robust Growth & Capitalization</h4>
+                            <p class="text-sm text-green-700 mt-1">Consistent portfolio growth (AUM up 15% YoY) combined with a strong CRAR of 18.5% underpins the A+ KI Score, indicating solid financial health and expansion capacity.</p>
+                        </div>
+                    </div>
+                     <div class="bg-red-50 border border-red-200 p-4 rounded-lg flex items-start space-x-4">
+                        <div class="w-8 h-8 flex-shrink-0 bg-red-500 rounded-full flex items-center justify-center text-white">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.03-1.742 3.03H4.42c-1.532 0-2.492-1.696-1.742-3.03l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-red-800">Risk in Digital Loans</h4>
+                            <p class="text-sm text-red-700 mt-1">The Digital Loans portfolio, while small, shows a worrying trend with the highest and rising delinquency (6.8% PAR 30+), suggesting a need for immediate underwriting policy review.</p>
+                        </div>
+                    </div>
+                    <div class="bg-orange-50 border border-orange-200 p-4 rounded-lg flex items-start space-x-4">
+                        <div class="w-8 h-8 flex-shrink-0 bg-orange-500 rounded-full flex items-center justify-center text-white">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a2 2 0 00-.266 1.4z" /></svg>
+                        </div>
+                         <div>
+                            <h4 class="font-bold text-orange-800">Potential Margin Pressure</h4>
+                            <p class="text-sm text-orange-700 mt-1">The narrowing spread between portfolio yield and cost of funds indicates potential margin pressure. This could be mitigated by focusing growth on higher-quality, lower-risk segments.</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Originator Onboarding Workflow
+            uploadOriginatorFilesBtn.addEventListener('click', () => {
+                originatorUpload.classList.add('hidden');
+                originatorAnalyzing.classList.remove('hidden');
+                setTimeout(() => {
+                    originatorAnalyzing.classList.add('hidden');
+                    originatorAnalysisResult.classList.remove('hidden');
+                    
+                    const extractedName = "Rafiki Microfinance Bank";
+                    const extractedCategory = "Microfinance Bank (MFB)";
+                    const extractedScore = "A+ (785)";
+
+                    analysisOriginatorName.textContent = extractedName;
+                    analysisOriginatorCategory.textContent = extractedCategory;
+                    const analysisKiScoreBtn = document.getElementById('analysisKiScore');
+                    analysisKiScoreBtn.dataset.name = extractedName;
+                    analysisKiScoreBtn.textContent = extractedScore.split(' ')[1].replace('(', '').replace(')', '');
+                    
+                    renderOriginatorInsights();
+
+                    createOrUpdateChart('assetClassDistChart', { type: 'doughnut', data: { labels: ['Boda-Boda', 'Agri-Finance', 'SME Capital', 'Digital Loans'], datasets: [{ data: [35, 25, 20, 20], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488', '#0f766e'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+                    createOrUpdateChart('geographicalDistChart', { type: 'doughnut', data: { labels: ['Nairobi', 'Rift Valley', 'Coast', 'Nyanza', 'Other'], datasets: [{ data: [45, 25, 15, 10, 5], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488', '#0f766e', '#99f6e4'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+                    createOrUpdateChart('delinquencyByAssetClass30', { type: 'line', data: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], datasets: [{ label: 'Boda-Boda', data: [4.1,4.2,4.5,4.3,4.6,4.5], borderColor: '#14b8a6' }, { label: 'Agri-Finance', data: [3.1,3.2,3.5,3.3,3.6,3.5], borderColor: '#84cc16' }, { label: 'SME Capital', data: [5.1,5.2,5.5,5.3,5.6,5.5], borderColor: '#f97316' }, { label: 'Digital Loans', data: [6.1,6.2,6.5,6.3,6.6,6.8], borderColor: '#ef4444' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+                    createOrUpdateChart('delinquencyByAssetClass90', { type: 'line', data: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], datasets: [{ label: 'Boda-Boda', data: [1.8,1.9,2.1,2.0,2.2,2.1], borderColor: '#14b8a6' }, { label: 'Agri-Finance', data: [0.8,0.9,0.9,0.8,0.9,0.9], borderColor: '#84cc16' }, { label: 'SME Capital', data: [2.8,2.9,3.1,3.0,3.2,3.1], borderColor: '#f97316' }, { label: 'Digital Loans', data: [3.8,3.9,4.1,4.0,4.2,4.2], borderColor: '#ef4444' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+                    createOrUpdateChart('portfolioGrowthChart', { type: 'bar', data: { labels: ['Q1 24', 'Q2 24', 'Q3 24', 'Q4 24', 'Q1 25', 'Q2 25'], datasets: [{ label: 'AUM (KES Billions)', data: [4.1, 4.3, 4.4, 4.6, 4.8, 5.0], backgroundColor: '#14b8a6' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+                    createOrUpdateChart('yieldVsCofChart', { type: 'line', data: { labels: ['Q1 24', 'Q2 24', 'Q3 24', 'Q4 24', 'Q1 25', 'Q2 25'], datasets: [{ label: 'Portfolio Yield', data: [22.1, 22.3, 22.0, 21.8, 21.6, 21.5], borderColor: '#14b8a6' }, { label: 'Cost of Funds', data: [12.1, 12.3, 12.5, 12.8, 13.0, 13.1], borderColor: '#f97316' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+                }, 2000);
+            });
+            onboardOriginatorBtn.addEventListener('click', () => {
+                const kiScoreButton = document.getElementById('analysisKiScore');
+                const newOriginator = {
+                    id: analysisOriginatorName.textContent.toLowerCase().replace(/\s/g, ''),
+                    name: analysisOriginatorName.textContent,
+                    score: `A+ (${kiScoreButton.textContent})`,
+                    par: document.getElementById('analysisPar').textContent,
+                    yield: document.getElementById('analysisYield').textContent,
+                    aum: document.getElementById('analysisAum').textContent.replace('KES ', '')
+                };
+                state.originators.push(newOriginator);
+                renderOriginators();
+                showPage('dealScreenHomePage');
+                updateHomeTab('originators');
+                originatorAnalysisResult.classList.add('hidden');
+                originatorUpload.classList.remove('hidden');
+            });
+
+            // Pool Creation Workflow
+            uploadPoolBtn.addEventListener('click', () => updatePoolSubStep('poolMappingSubStep'));
+            validateMappedPoolBtn.addEventListener('click', () => updatePoolSubStep('poolValidationErrorSubStep'));
+            reuploadPoolBtn.addEventListener('click', () => {
+                updatePoolSubStep('poolStructuringSubStep');
+            });
+
+            function applyFilters() {
+                simulationResultsPanel.classList.remove('hidden');
+                simulationOriginatorName.textContent = 'For Originator: Rafiki MFB';
+                const baseLoans = 9540;
+                const baseValue = 980;
+                const loanCount = Math.floor(baseLoans * (0.9 + Math.random() * 0.15));
+                const poolValue = Math.floor(baseValue * (0.9 + Math.random() * 0.15));
+                document.getElementById('selectedLoans').textContent = loanCount.toLocaleString();
+                document.getElementById('poolValue').textContent = `${poolValue}M`;
+                document.getElementById('poolTenure').textContent = `${Math.floor(17 + Math.random() * 2)} mo`;
+                
+                runSensitivitySimulation();
+
+                 createOrUpdateChart('geoConcentrationChart', {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Rift Valley'],
+                        datasets: [{ data: [40, 20, 15, 10, 15], backgroundColor: ['#14b8a6', '#0f766e', '#5eead4', '#99f6e4', '#a7f3d0'] }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, title: { display: true, text: 'Geographic Concentration' } } }
+                });
+
+                createOrUpdateChart('kiScoreDistChart', {
+                    type: 'bar',
+                    data: {
+                        labels: ['650-700', '701-750', '751-800', '801+'],
+                        datasets: [{ label: 'Loan Count', data: [3500, 4200, 1500, 340], backgroundColor: '#14b8a6' }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'KI Score Distribution' } } }
+                });
+            }
+
+            function runSensitivitySimulation() {
+                const lossRate = parseFloat(sensitivityLossSlider.value);
+                const prepayRate = parseFloat(sensitivityPrepaymentSlider.value);
+                const poolValue = parseFloat(document.getElementById('poolValue').textContent);
+                
+                document.getElementById('estimatedLoss').textContent = `${lossRate.toFixed(1)}%`;
+
+                const seniorYieldVal = (14.5 - (lossRate - 4.1) * 0.2 + (prepayRate - 8.0) * 0.05);
+                const mezzYieldVal = (18.2 - (lossRate - 4.1) * 0.5 + (prepayRate - 8.0) * 0.1);
+                
+                document.getElementById('seniorYield').textContent = `${seniorYieldVal.toFixed(1)}%`;
+                document.getElementById('mezzYield').textContent = `${mezzYieldVal.toFixed(1)}%`;
+                
+                const totalPrincipal = poolValue * 0.85; 
+                const totalInterest = poolValue * 0.15; 
+                
+                const seniorPrincipal = totalPrincipal * 0.8 * (1 - (lossRate / 100));
+                const seniorInterest = totalInterest * 0.8 * (1 - (lossRate / 100));
+                const mezzPrincipal = totalPrincipal * 0.12 * (1 - (lossRate / 100) * 1.5);
+                const mezzInterest = totalInterest * 0.12 * (1 - (lossRate / 100) * 1.5);
+                const equity = poolValue - seniorPrincipal - seniorInterest - mezzPrincipal - mezzInterest;
+
+                createOrUpdateChart('waterfallChart', {
+                    type: 'bar',
+                    data: {
+                        labels: ['Senior P', 'Senior I', 'Mezz P', 'Mezz I', 'Equity (Residual)'],
+                        datasets: [{
+                            label: 'Cashflow Application (KES Millions)',
+                            data: [seniorPrincipal.toFixed(0), seniorInterest.toFixed(0), mezzPrincipal.toFixed(0), mezzInterest.toFixed(0), equity.toFixed(0)],
+                            backgroundColor: ['#0d9488', '#5eead4', '#f97316', '#fb923c', '#8b5cf6']
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, title: { display: true, text: 'Cashflow Payout Waterfall (KES Millions)' } },
+                        scales: { y: { beginAtZero: true, title: { display: true, text: 'KES Millions' } } }
+                    }
+                });
+            }
+
+            applyFiltersBtn.addEventListener('click', applyFilters);
+            runSensitivitySimulationBtn.addEventListener('click', runSensitivitySimulation);
+
+            finalizePoolBtn.addEventListener('click', () => {
+                finalizePoolModal.classList.add('active');
+            });
+            cancelFinalizeBtn.addEventListener('click', () => finalizePoolModal.classList.remove('active'));
+            saveTransactionBtn.addEventListener('click', () => {
+                const name = finalizeTransactionNameInput.value.trim();
+                if (name) {
+                    const newTransaction = {
+                        id: name.toUpperCase().replace(/\s/g, '-'),
+                        name: name,
+                        originator: 'Rafiki MFB', // Placeholder
+                        structure: 'Securitisation',
+                        rating: document.getElementById('poolRating').textContent,
+                        tenure: document.getElementById('poolTenure').textContent,
+                        yield: 'N/A', // Yield is no longer displayed here
+                        covenantsSet: false
+                    };
+                    state.transactions.push(newTransaction);
+                    renderActiveTransactions();
+                    finalizePoolModal.classList.remove('active');
+                    finalizeTransactionNameInput.value = '';
+                    showPage('dealScreenHomePage');
+                    updateHomeTab('transactions');
+                }
+            });
+
+            // Filter Sliders Event Listeners
+            function setupRangeSlider(minSlider, maxSlider, minLabel, maxLabel, formatter) {
+                minSlider.addEventListener('input', () => {
+                    if (parseInt(minSlider.value) > parseInt(maxSlider.value)) {
+                        minSlider.value = maxSlider.value;
+                    }
+                    minLabel.textContent = formatter(minSlider.value);
+                });
+                maxSlider.addEventListener('input', () => {
+                     if (parseInt(maxSlider.value) < parseInt(minSlider.value)) {
+                        maxSlider.value = minSlider.value;
+                    }
+                    maxLabel.textContent = formatter(maxSlider.value);
+                });
+            }
+
+            setupRangeSlider(kiScoreMinSlider, kiScoreMaxSlider, kiScoreMinLabel, kiScoreMaxLabel, val => val);
+            setupRangeSlider(loanAmountMinSlider, loanAmountMaxSlider, loanAmountMinLabel, loanAmountMaxLabel, val => `${val/1000}k`);
+            setupRangeSlider(tenureMinSlider, tenureMaxSlider, tenureMinLabel, tenureMaxLabel, val => val);
+            setupRangeSlider(interestRateMinSlider, interestRateMaxSlider, interestRateMinLabel, interestRateMaxLabel, val => `${val}%`);
+
+            sensitivityLossSlider.addEventListener('input', (e) => { sensitivityLossLabel.textContent = `${parseFloat(e.target.value).toFixed(1)}%`; });
+            sensitivityPrepaymentSlider.addEventListener('input', (e) => { sensitivityPrepaymentLabel.textContent = `${parseFloat(e.target.value).toFixed(1)}%`; });
+
+
+            // --- DealTrack Initialization ---
+            dealTrackNav.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    dealTrackNav.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    const pageId = e.target.dataset.trackView + 'Page';
+                    const txId = transactionSelector.value;
+                    updateDealTrackPage(pageId, txId);
+                }
+            });
+
+            saveCovenantBtn.addEventListener('click', () => {
+                const tx = state.transactions.find(t => t.id === state.currentTransactionId);
+                if (tx) {
+                    tx.covenantsSet = true;
+                    if (!state.covenantData[tx.id]) {
+                        initializeCovenantData();
+                    }
+                }
+                renderActiveTransactions();
+                updateMainView('dealScreen');
+                showPage('dealScreenHomePage');
+                updateHomeTab('transactions');
+            });
+
+            // --- Covenant Monitoring Logic ---
+            function populateTransactionSelector(selectedTxId) {
+                const selectors = [transactionSelector, perfTransactionSelector, impactTransactionSelector];
+                selectors.forEach(selector => {
+                    selector.innerHTML = '';
+                    const eligibleTransactions = state.transactions.filter(t => t.covenantsSet);
+                    eligibleTransactions.forEach(tx => {
+                        const option = document.createElement('option');
+                        option.value = tx.id;
+                        option.textContent = tx.name;
+                        selector.appendChild(option);
+                    });
+                     if (selectedTxId && eligibleTransactions.some(t => t.id === selectedTxId)) {
+                        selector.value = selectedTxId;
+                    }
+                });
+            }
+
+            function renderCovenantMonitoringPage(txId) {
+                const data = state.covenantData[txId];
+                if (!data) {
+                    console.error(`No covenant data for transaction ${txId}`);
+                    covenantStatusTableBody.innerHTML = '<tr><td colspan="6" class="text-center p-4">No covenant data available for this transaction.</td></tr>';
+                    documentStatusTableBody.innerHTML = '<tr><td colspan="4" class="text-center p-4">No document data available for this transaction.</td></tr>';
+                    return;
+                }
+
+                const statusClasses = {
+                    compliant: 'px-2 py-1 font-semibold leading-tight text-green-700 bg-green-100 rounded-full',
+                    submitted: 'px-2 py-1 font-semibold leading-tight text-green-700 bg-green-100 rounded-full',
+                    at_risk: 'px-2 py-1 font-semibold leading-tight text-orange-700 bg-orange-100 rounded-full',
+                    breached: 'px-2 py-1 font-semibold leading-tight text-red-700 bg-red-100 rounded-full',
+                    pending: 'px-2 py-1 font-semibold leading-tight text-gray-700 bg-gray-100 rounded-full'
+                };
+
+                // Populate Covenant Status Table
+                covenantStatusTableBody.innerHTML = '';
+                data.covenants.forEach(c => {
+                    const row = `
+                        <tr class="border-b">
+                            <td class="px-4 py-2 font-medium text-gray-800">${c.name}</td>
+                            <td class="px-4 py-2">${c.condition}</td>
+                            <td class="px-4 py-2">${c.required}</td>
+                            <td class="px-4 py-2">${c.actual}</td>
+                            <td class="px-4 py-2"><span class="${statusClasses[c.status] || ''}">${c.status.replace('_', ' ')}</span></td>
+                            <td class="px-4 py-2 text-center text-xl">${c.trend || ''}</td>
+                        </tr>
+                    `;
+                    covenantStatusTableBody.innerHTML += row;
+                });
+
+                // Populate Document Status Table
+                documentStatusTableBody.innerHTML = '';
+                 data.documents.forEach(d => {
+                    const row = `
+                        <tr class="border-b">
+                            <td class="px-4 py-2 font-medium text-gray-800">${d.name}</td>
+                            <td class="px-4 py-2">${d.frequency}</td>
+                            <td class="px-4 py-2">${d.nextDue}</td>
+                            <td class="px-4 py-2"><span class="${statusClasses[d.status] || ''}">${d.status.replace('_', ' ')}</span></td>
+                        </tr>
+                    `;
+                    documentStatusTableBody.innerHTML += row;
+                });
+                
+                // Render EWS Charts
+                renderEWSChart('par90Chart', data.charts.par90, ewsPar90);
+                renderEWSChart('collectionEffChart', data.charts.collectionEff, ewsCollectionEff);
+                renderEWSChart('crarChart', data.charts.crar, ewsCrar);
+                renderEWSChart('yieldChart', data.charts.yield, ewsYield);
+            }
+
+            function renderEWSChart(chartId, chartData, ewsElement) {
+                const config = {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [
+                            {
+                                label: 'Actuals',
+                                data: chartData.actuals,
+                                borderColor: '#0d9488', // Teal
+                                backgroundColor: '#0d9488',
+                                tension: 0.1,
+                                borderWidth: 2
+                            },
+                            {
+                                label: 'Estimates',
+                                data: chartData.estimates,
+                                borderColor: '#2563eb', // Blue
+                                backgroundColor: '#2563eb',
+                                borderDash: [5, 5],
+                                tension: 0.1,
+                                borderWidth: 2
+                            },
+                            {
+                                label: 'Breach',
+                                data: chartData.breachLine,
+                                borderColor: '#ef4444', // Red
+                                backgroundColor: '#ef4444',
+                                borderDash: [5, 5],
+                                pointRadius: 0,
+                                borderWidth: 1.5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+                                grid: { display: false }
+                            },
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) { return value.toFixed(1) + '%'; }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom', labels: { usePointStyle: true } },
+                            tooltip: { mode: 'index', intersect: false }
+                        }
+                    }
+                };
+                createOrUpdateChart(chartId, config);
+
+                if (chartData.predictedBreach) {
+                    ewsElement.innerHTML = `
+                        <span class="flex items-center text-red-600">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.03-1.742 3.03H4.42c-1.532 0-2.492-1.696-1.742-3.03l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                            BREACH PREDICTED
+                        </span>`;
+                } else {
+                    ewsElement.innerHTML = `
+                        <span class="flex items-center text-green-600">
+                           <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                            STABLE
+                        </span>`;
+                }
+            }
+            
+            function renderPerformancePage(txId) {
+                // This function would normally fetch data for the given txId.
+                // For this demo, we'll use static data.
+                
+                // Portfolio Composition Charts
+                createOrUpdateChart('posByLoanPurposeChart', {
+                    type: 'doughnut',
+                    data: { labels: ['Boda-Boda', 'Agri-Finance', 'SME Capital', 'Other'], datasets: [{ data: [45, 25, 20, 10], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488', '#0f766e'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                });
+                createOrUpdateChart('posByCountyChart', {
+                    type: 'doughnut',
+                    data: { labels: ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Other'], datasets: [{ data: [40, 22, 18, 12, 8], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488', '#0f766e', '#99f6e4'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                });
+
+                // Delinquency Analysis Charts
+                const barOptions = { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, title: { display: true, text: 'PAR 30+ (%)' } } } };
+                createOrUpdateChart('parByLoanPurposeChart', { type: 'bar', data: { labels: ['Boda-Boda', 'Agri-Finance', 'SME Capital', 'Other'], datasets: [{ data: [4.2, 3.1, 5.5, 6.8], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488', '#ef4444'] }] }, options: barOptions });
+                createOrUpdateChart('parByCountyChart', { type: 'bar', data: { labels: ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Other'], datasets: [{ data: [4.1, 4.5, 8.1, 3.9, 5.2], backgroundColor: ['#14b8a6', '#5eead4', '#ef4444', '#0d9488', '#0f766e'] }] }, options: barOptions });
+                createOrUpdateChart('parByLoanCycleChart', { type: 'bar', data: { labels: ['Cycle 1', 'Cycle 2', 'Cycle 3', 'Cycle 4+'], datasets: [{ data: [7.5, 4.1, 2.5, 1.8], backgroundColor: ['#ef4444', '#f97316', '#14b8a6', '#0d9488'] }] }, options: barOptions });
+                createOrUpdateChart('parByKiScoreChart', { type: 'bar', data: { labels: ['<600', '600-680', '681-750', '750+'], datasets: [{ data: [9.2, 6.3, 3.1, 1.5], backgroundColor: ['#ef4444', '#f97316', '#14b8a6', '#0d9488'] }] }, options: barOptions });
+
+                // Vintage Analysis Chart
+                createOrUpdateChart('vintageAnalysisChart', {
+                    type: 'line',
+                    data: {
+                        labels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'], // Months on Book
+                        datasets: [
+                            { label: 'Q3 2024', data: [0.5, 1.1, 1.8, 2.5, 3.0, 3.4, 3.7, 3.9, 4.1, 4.2, 4.3, 4.3], borderColor: '#06b6d4', tension: 0.1 },
+                            { label: 'Q4 2024', data: [0.4, 0.9, 1.5, 2.1, 2.6, 3.0, 3.3, 3.5, 3.6, null, null, null], borderColor: '#14b8a6', tension: 0.1 },
+                            { label: 'Q1 2025', data: [0.3, 0.8, 1.3, 1.9, 2.3, null, null, null, null, null, null, null], borderColor: '#84cc16', tension: 0.1 },
+                            { label: 'Q2 2025', data: [0.2, 0.6, 1.1, null, null, null, null, null, null, null, null, null], borderColor: '#f97316', tension: 0.1 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } },
+                        scales: {
+                            x: { title: { display: true, text: 'Months on Book' } },
+                            y: { title: { display: true, text: 'PAR 90+ (%)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+
+            function renderImpactPage(txId) {
+                // Mock data for impact page
+                createOrUpdateChart('genderPerformanceChart', {
+                    type: 'bar',
+                    data: { labels: ['PAR 30+', 'Collection %'], datasets: [ { label: 'Female', data: [4.8, 98.5], backgroundColor: '#14b8a6' }, { label: 'Male', data: [5.3, 97.9], backgroundColor: '#0f766e' } ] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+                });
+                createOrUpdateChart('sdgDoughnutChart', {
+                    type: 'doughnut',
+                    data: { labels: ['No Poverty', 'Decent Work', 'Reduced Inequality'], datasets: [{ data: [48, 32, 20], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '60%' }
+                });
+                createOrUpdateChart('sectorDoughnutChart', {
+                    type: 'doughnut',
+                    data: { labels: ['Retail', 'Transport', 'Agriculture', 'Services', 'Other'], datasets: [{ data: [35, 25, 20, 15, 5], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488', '#0f766e', '#99f6e4'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } }, cutout: '60%' }
+                });
+                createOrUpdateChart('ruralUrbanChart', {
+                    type: 'bar',
+                    data: { labels: ['Rural', 'Peri-Urban', 'Urban'], datasets: [{ label: 'Borrower Count', data: [5197, 2362, 1891], backgroundColor: ['#14b8a6', '#5eead4', '#0d9488'] }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+                 createOrUpdateChart('borrowerProfileChart', {
+                    type: 'bar',
+                    data: {
+                        labels: ['First-Time Borrowers', 'Youth (<35)', 'Female Entrepreneurs'],
+                        datasets: [{
+                            label: 'Number of Borrowers',
+                            data: [2835, 3780, 1850],
+                            backgroundColor: ['#14b8a6', '#5eead4', '#0d9488']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+                });
+            }
+
+            transactionSelector.addEventListener('change', (e) => {
+                renderCovenantMonitoringPage(e.target.value);
+            });
+             perfTransactionSelector.addEventListener('change', (e) => {
+                renderPerformancePage(e.target.value);
+            });
+            impactTransactionSelector.addEventListener('change', (e) => {
+                renderImpactPage(e.target.value);
+            });
+
+
+            function initializeMappingFields() {
+                const container = document.getElementById('mappingFieldsContainer');
+                const fields = ['loan_id', 'customer_id', 'customer_name', 'customer_dob', 'customer_gender', 'customer_location', 'principal_amount', 'disbursement_date', 'maturity_date', 'interest_rate', 'emi_amount', 'loan_cycle', 'collateral_type', 'collateral_value', 'bureau_score', 'dpd', 'last_payment_date', 'outstanding_principal', 'asset_make', 'asset_model'];
+                let html = '<div class="grid grid-cols-2 gap-4"><span class="font-medium text-gray-500">Your File Column</span><span class="font-medium text-gray-500">KI Required Field</span></div>';
+                fields.forEach(field => {
+                    const formattedField = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    html += `<div class="grid grid-cols-2 gap-4 items-center p-2 bg-gray-50 rounded-md"><span class="text-sm">${field}</span><select class="block w-full rounded-md border-gray-300 shadow-sm text-sm"><option>${formattedField}</option></select></div>`;
+                });
+                container.innerHTML = html;
+            }
+
+            function initializeCountyMultiSelect() {
+                 const counties = ["Mombasa", "Kwale", "Kilifi", "Tana River", "Lamu", "Taita-Taveta", "Garissa", "Wajir", "Mandera", "Marsabit", "Isiolo", "Meru", "Tharaka-Nithi", "Embu", "Kitui", "Machakos", "Makueni", "Nyandarua", "Nyeri", "Kirinyaga", "Murang'a", "Kiambu", "Turkana", "West Pokot", "Samburu", "Trans-Nzoia", "Uasin Gishu", "Elgeyo-Marakwet", "Nandi", "Baringo", "Laikipia", "Nakuru", "Narok", "Kajiado", "Kericho", "Bomet", "Kakamega", "Vihiga", "Bungoma", "Busia", "Siaya", "Kisumu", "Homa Bay", "Migori", "Kisii", "Nyamira", "Nairobi"];
+                 const select = document.getElementById('countiesMultiSelect');
+                 counties.forEach(county => {
+                     const option = document.createElement('option');
+                     option.value = county;
+                     option.innerText = county;
+                     select.appendChild(option);
+                 });
+                 countiesMultiSelect = new Choices(select, { removeItemButton: true });
+            }
+            
+            // Initial Load
+            updateMainView('dealScreen');
+            showPage('dealScreenHomePage');
+            updateHomeTab('originators');
+            initializeData();
+            initializeMappingFields();
+            initializeCountyMultiSelect();
+        });
+    </script>
+</body>
+</html>
